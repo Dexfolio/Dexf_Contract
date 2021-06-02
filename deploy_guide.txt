@@ -1,0 +1,18 @@
+## Dexf deploy guide
+
+1. deploy Dexf contract
+2. deploy LpFarm contract with dexf address param
+3. set staking contract address for dexf contract
+    call [setStakingContract] function
+4. set multipliers for lp farm contract
+    call [setMultipliers] function
+5. add Dexf-BNB liquidity
+
+
+
+## Additional for testing
+
+6. deploy test token contract(BUSD)
+7. set busd address for lp farm contract
+    call [changeTokenAddress] (param: address, 1)
+8. add BUSD-BNB liquidity

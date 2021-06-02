@@ -1,0 +1,36 @@
+{
+  "name": "Dexf",
+  "version": "1.0.0",
+  "description": "Dexf contract",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "truffle build",
+    "test": "truffle test ./test/LPFarm.test.js",
+    "prettier": "pretty-quick --pattern \"**/*.*(js|jsx)\""
+  },
+  "repository": {
+    "type": "git"
+  },
+  "keywords": [
+    "liquidity",
+    "staking",
+    "ethereum",
+    "solidity",
+    "erc20"
+  ],
+  "author": "",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "bignumber.js": "^9.0.1",
+    "moment": "^2.29.1",
+    "truffle-assertions": "^0.9.2",
+    "truffle-hdwallet-provider": "^1.0.17"
+  },
+  "devDependencies": {
+    "prettier": "^2.1.2",
+    "pretty-quick": "^3.0.2"
+  }
+}

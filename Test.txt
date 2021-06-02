@@ -1,0 +1,11 @@
+## Test Plan
+
+1. deploy dexf token contract
+2. change v2 router address to 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
+3. change _dexf address
+4. deploy dexf farm contract
+5. set staking contract address for token contract
+6. check pair address and add liquidity
+7. transfer token to address 1, address 2
+8. stake from address1 and address 2
+9. check reward amount and claim, unstake
