@@ -412,7 +412,7 @@ contract DEXF is BEP20Interface, Pausable {
 
         _DAILY_RELEASE_AMOUNT_TREASURY = 72000000E18 / uint256(3647); // 3647 days
         _DAILY_RELEASE_AMOUNT_TEAM = 20000000E18 / uint256(104); // 104 days
-        _DAILY_RELEASE_PERCENT_STAKING = 5;
+        _DAILY_RELEASE_PERCENT_STAKING = 10;
         _stakingRewardRemaining = 68000000E18;
 
         _epoch1Start = block.timestamp + 3600 * 24 * 7 * 6;

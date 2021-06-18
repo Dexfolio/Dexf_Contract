@@ -16,3 +16,26 @@
 7. set busd address for lp farm contract
     call [changeTokenAddress] (param: address, 1)
 8. add BUSD-BNB liquidity
+
+
+
+## Governor work flow
+
+1. propose
+2. castVote
+3. queue
+4. execute
+5. cancel
+
+
+
+## Governor deploy guide
+
+1. Deploy timelock contract
+2. Deploy governor contract with timelock address
+3. Change timelock admin to governorAlpha
+	- call queueTransaction for set pending Admin from current timelock admin
+      timelockAddress, 0, "setPendingAdmin(address)", encodedAbi, eta
+    - call executeTransaction from current timelock admin
+    - call __acceptAdmin of GovernorAlpha from guardian
+4. set owner of dexf contract to timelock contract

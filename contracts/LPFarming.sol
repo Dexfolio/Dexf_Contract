@@ -297,7 +297,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
     // _stakes[user][]
     mapping(address => Stake[]) private _stakes;
 
-    mapping(uint128 => uint256) public _totalMultipliers;
+    mapping(uint128 => uint256) public totalMultipliers;
 
     // id of last init epoch, for optimization purposes moved from struct to a single id.
     uint128 public lastInitializedEpoch;
@@ -437,9 +437,9 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
 
         for (uint128 i = lastInitializedEpoch + 1; i <= epochId; i++) {
             if (i == 0) {
-                _totalMultipliers[i] = 0;
+                totalMultipliers[i] = 0;
             } else {
-                _totalMultipliers[i] = _totalMultipliers[i - 1];
+                totalMultipliers[i] = totalMultipliers[i - 1];
             }
 
             for (uint256 j = _lastInitializedRewardDay + 1; j <= i; j++) {
@@ -624,7 +624,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         if (lastInitializedEpoch < currentEpochId) {
             _initEpoch(currentEpochId);
         }
-        _totalMultipliers[currentEpochId] = _totalMultipliers[currentEpochId].add(newBalance.mul(calcMultiplier(lockWeeks)));
+        totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].add(newBalance.mul(calcMultiplier(lockWeeks)));
 
         emit Staked(_msgSender(), newBalance);
 
@@ -656,7 +656,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         if (lastInitializedEpoch < currentEpochId) {
             _initEpoch(currentEpochId);
         }
-        _totalMultipliers[currentEpochId] = _totalMultipliers[currentEpochId].add(newBalance.mul(calcMultiplier(lockWeeks)));
+        totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].add(newBalance.mul(calcMultiplier(lockWeeks)));
 
         emit Staked(_msgSender(), newBalance);
 
@@ -692,7 +692,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         if (lastInitializedEpoch < currentEpochId) {
             _initEpoch(currentEpochId);
         }
-        _totalMultipliers[currentEpochId] = _totalMultipliers[currentEpochId].add(newBalance.mul(calcMultiplier(lockWeeks)));
+        totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].add(newBalance.mul(calcMultiplier(lockWeeks)));
 
         emit Staked(_msgSender(), newBalance);
 
@@ -717,7 +717,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         if (lastInitializedEpoch < currentEpochId) {
             _initEpoch(currentEpochId);
         }
-        _totalMultipliers[currentEpochId] = _totalMultipliers[currentEpochId].add(amount.mul(calcMultiplier(lockWeeks)));
+        totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].add(amount.mul(calcMultiplier(lockWeeks)));
 
         emit Staked(_msgSender(), amount);
 
@@ -749,7 +749,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         _dexfBNBV2Pair.transfer(_msgSender(), stakes[index].amount);
 
         stakes[index].endEpochId = currentEpochId - 1;
-        _totalMultipliers[currentEpochId] = _totalMultipliers[currentEpochId].sub(stakes[index].amount.mul(calcMultiplier(stakes[index].lockWeeks)));
+        totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].sub(stakes[index].amount.mul(calcMultiplier(stakes[index].lockWeeks)));
 
         // Claim reward
         claimByIndex(index);
@@ -785,7 +785,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         uint256 total;
         uint128 lastEpochId = stakes[index].endEpochId > 0 ? stakes[index].endEpochId : currentEpochId - 1;
         for (uint128 i = stakes[index].lastClaimEpochId + 1; i <= lastEpochId; i++) {
-            if (_totalMultipliers[i] == 0 || _dailyStakingRewards[uint256(i)] == 0) {
+            if (totalMultipliers[i] == 0 || _dailyStakingRewards[uint256(i)] == 0) {
                 lastEpochId = i - 1;
                 break;
             }
@@ -794,7 +794,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
                 _dailyStakingRewards[uint256(i)].mul(
                     stakes[index].amount.mul(calcMultiplier(stakes[index].lockWeeks))
                 ).div(
-                    _totalMultipliers[i]
+                    totalMultipliers[i]
                 )
             );
         }

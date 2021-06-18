@@ -16,9 +16,9 @@ const {
 }  =  require('./utils');
 
 const pancakeSwapV2RouterAddress = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
-const FIRST_DAY_REWARD = 34000;
-const SECOND_DAY_REWARD = 33983;
-const THIRD_DAY_REWARD = 33966.0085;
+const FIRST_DAY_REWARD = 68000;
+const SECOND_DAY_REWARD = 67932;
+const THIRD_DAY_REWARD = 67864.068;
 
 contract("LPFarming", async (accounts) => {
   const deployer = accounts[0];

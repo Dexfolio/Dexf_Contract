@@ -2,6 +2,8 @@ const fs = require('fs');
 const dexfToken = artifacts.require("./DEXF.sol");
 const lpFarm = artifacts.require("./LPFarming.sol");
 const erc20 = artifacts.require("./ERC20Mock.sol");
+const governor = artifacts.require("./Governance/GovernorAlpha.sol");
+const timelock = artifacts.require("./Governance/Timelock.sol");
 
 function expertContractJSON(contractName, instance) {
   const path = "./test/abis/" + contractName + ".json";
