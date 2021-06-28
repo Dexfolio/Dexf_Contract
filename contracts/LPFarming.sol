@@ -292,12 +292,23 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         uint128 lockWeeks;
         uint256 claimedAmount;
         uint128 lastClaimEpochId;
+        uint256 startTimestamp;
+        uint256 endTimestamp;
     }
 
     // _stakes[user][]
     mapping(address => Stake[]) private _stakes;
 
     mapping(uint128 => uint256) public totalMultipliers;
+
+    struct Checkpoint {
+        uint256 timestamp;
+        uint256 multiplier;
+    }
+
+    // total multiplier checkpoints
+    mapping(uint32 => Checkpoint) public checkpoints;
+    uint32 public numCheckpoints;
 
     // id of last init epoch, for optimization purposes moved from struct to a single id.
     uint128 public lastInitializedEpoch;
@@ -619,12 +630,24 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         uint128 currentEpochId = getCurrentEpoch();
 
         Stake[] storage stakes = _stakes[_msgSender()];
-        stakes.push(Stake(newBalance, currentEpochId, 0, lockWeeks, 0, currentEpochId > 0 ? currentEpochId - 1 : 0));
+        stakes.push(Stake(newBalance, currentEpochId, 0, lockWeeks, 0, currentEpochId > 0 ? currentEpochId - 1 : 0, block.timestamp, 0));
 
         if (lastInitializedEpoch < currentEpochId) {
             _initEpoch(currentEpochId);
         }
         totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].add(newBalance.mul(calcMultiplier(lockWeeks)));
+
+        if (numCheckpoints == 0) {
+            checkpoints[0].timestamp = block.timestamp;
+            checkpoints[0].multiplier = totalMultipliers[currentEpochId];
+            numCheckpoints = 1;
+        } else if (checkpoints[numCheckpoints - 1].timestamp == block.timestamp) {
+            checkpoints[numCheckpoints - 1].multiplier = totalMultipliers[currentEpochId];
+        } else {
+            checkpoints[numCheckpoints].timestamp = block.timestamp;
+            checkpoints[numCheckpoints].multiplier = totalMultipliers[currentEpochId];
+            numCheckpoints++;
+        }
 
         emit Staked(_msgSender(), newBalance);
 
@@ -651,12 +674,24 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         uint128 currentEpochId = getCurrentEpoch();
 
         Stake[] storage stakes = _stakes[_msgSender()];
-        stakes.push(Stake(newBalance, currentEpochId, 0, lockWeeks, 0, currentEpochId > 0 ? currentEpochId - 1 : 0));
+        stakes.push(Stake(newBalance, currentEpochId, 0, lockWeeks, 0, currentEpochId > 0 ? currentEpochId - 1 : 0, block.timestamp, 0));
 
         if (lastInitializedEpoch < currentEpochId) {
             _initEpoch(currentEpochId);
         }
         totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].add(newBalance.mul(calcMultiplier(lockWeeks)));
+
+        if (numCheckpoints == 0) {
+            checkpoints[0].timestamp = block.timestamp;
+            checkpoints[0].multiplier = totalMultipliers[currentEpochId];
+            numCheckpoints = 1;
+        } else if (checkpoints[numCheckpoints - 1].timestamp == block.timestamp) {
+            checkpoints[numCheckpoints - 1].multiplier = totalMultipliers[currentEpochId];
+        } else {
+            checkpoints[numCheckpoints].timestamp = block.timestamp;
+            checkpoints[numCheckpoints].multiplier = totalMultipliers[currentEpochId];
+            numCheckpoints++;
+        }
 
         emit Staked(_msgSender(), newBalance);
 
@@ -687,12 +722,24 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         uint128 currentEpochId = getCurrentEpoch();
 
         Stake[] storage stakes = _stakes[_msgSender()];
-        stakes.push(Stake(newBalance, currentEpochId, 0, lockWeeks, 0, currentEpochId > 0 ? currentEpochId - 1 : 0));
+        stakes.push(Stake(newBalance, currentEpochId, 0, lockWeeks, 0, currentEpochId > 0 ? currentEpochId - 1 : 0, block.timestamp, 0));
 
         if (lastInitializedEpoch < currentEpochId) {
             _initEpoch(currentEpochId);
         }
         totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].add(newBalance.mul(calcMultiplier(lockWeeks)));
+
+        if (numCheckpoints == 0) {
+            checkpoints[0].timestamp = block.timestamp;
+            checkpoints[0].multiplier = totalMultipliers[currentEpochId];
+            numCheckpoints = 1;
+        } else if (checkpoints[numCheckpoints - 1].timestamp == block.timestamp) {
+            checkpoints[numCheckpoints - 1].multiplier = totalMultipliers[currentEpochId];
+        } else {
+            checkpoints[numCheckpoints].timestamp = block.timestamp;
+            checkpoints[numCheckpoints].multiplier = totalMultipliers[currentEpochId];
+            numCheckpoints++;
+        }
 
         emit Staked(_msgSender(), newBalance);
 
@@ -712,12 +759,24 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         uint128 currentEpochId = getCurrentEpoch();
 
         Stake[] storage stakes = _stakes[_msgSender()];
-        stakes.push(Stake(amount, currentEpochId, 0, lockWeeks, 0, currentEpochId > 0 ? currentEpochId - 1 : 0));
+        stakes.push(Stake(amount, currentEpochId, 0, lockWeeks, 0, currentEpochId > 0 ? currentEpochId - 1 : 0, block.timestamp, 0));
 
         if (lastInitializedEpoch < currentEpochId) {
             _initEpoch(currentEpochId);
         }
         totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].add(amount.mul(calcMultiplier(lockWeeks)));
+
+        if (numCheckpoints == 0) {
+            checkpoints[0].timestamp = block.timestamp;
+            checkpoints[0].multiplier = totalMultipliers[currentEpochId];
+            numCheckpoints = 1;
+        } else if (checkpoints[numCheckpoints - 1].timestamp == block.timestamp) {
+            checkpoints[numCheckpoints - 1].multiplier = totalMultipliers[currentEpochId];
+        } else {
+            checkpoints[numCheckpoints].timestamp = block.timestamp;
+            checkpoints[numCheckpoints].multiplier = totalMultipliers[currentEpochId];
+            numCheckpoints++;
+        }
 
         emit Staked(_msgSender(), amount);
 
@@ -749,10 +808,23 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         _dexfBNBV2Pair.transfer(_msgSender(), stakes[index].amount);
 
         stakes[index].endEpochId = currentEpochId - 1;
+        stakes[index].endTimestamp = block.timestamp;
         totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].sub(stakes[index].amount.mul(calcMultiplier(stakes[index].lockWeeks)));
 
+        if (numCheckpoints == 0) {
+            checkpoints[0].timestamp = block.timestamp;
+            checkpoints[0].multiplier = totalMultipliers[currentEpochId];
+            numCheckpoints = 1;
+        } else if (checkpoints[numCheckpoints - 1].timestamp == block.timestamp) {
+            checkpoints[numCheckpoints - 1].multiplier = totalMultipliers[currentEpochId];
+        } else {
+            checkpoints[numCheckpoints].timestamp = block.timestamp;
+            checkpoints[numCheckpoints].multiplier = totalMultipliers[currentEpochId];
+            numCheckpoints++;
+        }
+
         // Claim reward
-        claimByIndex(index);
+        _claimByIndex(index);
 
         emit Unstaked(_msgSender(), stakes[index].amount);
 
@@ -802,7 +874,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         return (total, lastEpochId);
     }
 
-    function claimByIndex(uint128 index) public returns (bool) {
+    function _claimByIndex(uint128 index) internal returns (bool) {
         uint128 currentEpochId = getCurrentEpoch();
         if (lastInitializedEpoch < currentEpochId) {
             _initEpoch(currentEpochId);
@@ -823,30 +895,57 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         return true;
     }
 
-    function claim() public returns (bool) {
-        uint128 currentEpochId = getCurrentEpoch();
-        if (lastInitializedEpoch < currentEpochId) {
-            _initEpoch(currentEpochId);
+    function getPriorTotalMultiplier(uint256 timestamp) public view returns (uint256) {
+        if (numCheckpoints == 0) {
+            return 0;
+        }
+        if (timestamp == 0 || timestamp >= block.timestamp) {
+            return checkpoints[numCheckpoints - 1].multiplier;
         }
 
-        uint256 totalClaimAmount = getTotalClaimAmount(_msgSender());
-        require(totalClaimAmount > 0, "Farming: Invalid claim");
+        // First check most recent multiplier
+        if (checkpoints[numCheckpoints - 1].timestamp <= timestamp) {
+            return checkpoints[numCheckpoints - 1].multiplier;
+        }
 
-        Stake[] storage stakes = _stakes[_msgSender()];
-        for (uint128 i; i < stakes.length; i++) {
-            (uint256 total, uint128 lastEpochId) = getClaimAmountByIndex(_msgSender() ,i);
-            if (total > 0) {
-                stakes[i].lastClaimEpochId = lastEpochId;
-                stakes[i].claimedAmount = stakes[i].claimedAmount + total;
+        // Next check implicit zero multiplier
+        if (checkpoints[0].timestamp > timestamp) {
+            return 0;
+        }
+
+        uint32 lower = 0;
+        uint32 upper = numCheckpoints - 1;
+        while (upper > lower) {
+            uint32 center = upper - (upper - lower) / 2; // ceil, avoiding overflow
+            Checkpoint memory cp = checkpoints[center];
+            if (cp.timestamp == timestamp) {
+                return cp.multiplier;
+            } else if (cp.timestamp < timestamp) {
+                lower = center;
+            } else {
+                upper = center - 1;
+            }
+        }
+        return checkpoints[lower].multiplier;
+    }
+
+    function getPriorMultiplier(address account, uint256 timestamp) external view returns (uint256, uint256) {
+        uint256 checkTime = timestamp;
+        if (timestamp == 0) {
+            checkTime = block.timestamp;
+        }
+
+        Stake[] storage stakes = _stakes[account];
+        uint256 multiplier;
+        for (uint256 i; i < stakes.length; i++) {
+            if (stakes[i].startTimestamp <= checkTime && (stakes[i].endTimestamp == 0 || checkTime < stakes[i].endTimestamp)) {
+                multiplier += stakes[i].amount.mul(calcMultiplier(stakes[i].lockWeeks));
             }
         }
 
-        _dexf.claimStakingReward(_msgSender(), totalClaimAmount);
-        _totalRewardDistributed = _totalRewardDistributed.add(totalClaimAmount);
+        uint256 totalMultiplier = getPriorTotalMultiplier(timestamp);
 
-        emit ClaimedReward(_msgSender(), totalClaimAmount);
-
-        return true;
+        return (totalMultiplier, multiplier);
     }
 
     function removeOddTokens() external returns (bool) {

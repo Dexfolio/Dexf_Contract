@@ -35,6 +35,8 @@ contract("LPFarming", async (accounts) => {
   let pairToken;
   let epoch1Start;
   let epochDuration;
+  let time1, time2, time3;
+  let totalMultiplier2, totalMultiplier3;
 
   before(async () => {
     // console.log("Deploying new contract");
@@ -94,6 +96,7 @@ contract("LPFarming", async (accounts) => {
     const currentBlockNumber = await new web3.eth.getBlockNumber();
     const currentBlock = await new web3.eth.getBlock(currentBlockNumber);
     const lastTimestamp = currentBlock.timestamp;
+    time1 = lastTimestamp;
 
     // approve dexf for pancakeSwapV2Router
     const tokenAmount = new BigNumber(10000000E18).toString(10);
@@ -195,59 +198,10 @@ contract("LPFarming", async (accounts) => {
       assert.isAbove(Number(stakes[0]["amount"]), 0, 'Stake amount is greater than 0');
     });
 
-    it("Claim reward for epoch 1", async function () {
-      await moveAtEpoch(epoch1Start, epochDuration, 2);
-
-      await lpFarmInstance.manualEpochInit(
-        2,
-        { from: deployer }
-      );
-
-      // Claim reward
-      await lpFarmInstance.claimByIndex(
-        0,
-        { from: Alice, gasLimit: 4000000 }
-      );
-      const dexfBalance = await callMethod(
-        dexfToken.methods.balanceOf,
-        [Alice]
-      );
-      const stakes = await callMethod(
-        lpFarm.methods.getStakes,
-        [Alice]
-      );
-      expect(dexfBalance).to.be.equal(new BigNumber(FIRST_DAY_REWARD).times(new BigNumber(1E18)).toString(10));
-      expect(stakes[0]["claimedAmount"]).to.be.equal(new BigNumber(FIRST_DAY_REWARD).times(new BigNumber(1E18)).toString(10));
-    });
-
-    it("Claim reward for epoch 2", async function () {
-      // move to epoch 3
-      await moveAtEpoch(epoch1Start, epochDuration, 3);
-
-      // Claim reward
-      await lpFarmInstance.claimByIndex(
-        0,
-        { from: Alice, gasLimit: 4000000 }
-      );
-      const dexfBalance = await callMethod(
-        dexfToken.methods.balanceOf,
-        [Alice]
-      );
-      const stakes = await callMethod(
-        lpFarm.methods.getStakes,
-        [Alice]
-      );
-      expect(dexfBalance).to.be.equal(new BigNumber(FIRST_DAY_REWARD + SECOND_DAY_REWARD).times(new BigNumber(1E18)).toString(10));
-      expect(stakes[0]["claimedAmount"]).to.be.equal(new BigNumber(FIRST_DAY_REWARD + SECOND_DAY_REWARD).times(new BigNumber(1E18)).toString(10));
-
-      const totalClaimed = await callMethod(
-        lpFarm.methods._totalRewardDistributed,
-        []
-      );
-      expect(totalClaimed).to.be.equal(new BigNumber(FIRST_DAY_REWARD + SECOND_DAY_REWARD).times(new BigNumber(1E18)).toString(10));
-    });
-
     it("Unstake is available after lock duration", async function () {
+      // move to epoch 2
+      await moveAtEpoch(epoch1Start, epochDuration, 4);
+
       // Unstake
       await truffleAssert.reverts(lpFarmInstance.unstake(
         0,
@@ -255,8 +209,8 @@ contract("LPFarming", async (accounts) => {
       ), "Farming: Lock is not finished.");
     });
 
-    it("Stake from Bob", async function () {
-      // Epoch 3
+    it("Stake Erc20 token", async function () {
+      // Epoch 2
 
       // stake 2 Eth for 11 weeks in epoch 3
       await lpFarmInstance.stake(
@@ -266,35 +220,6 @@ contract("LPFarming", async (accounts) => {
 
       // move to epoch 4
       await moveAtEpoch(epoch1Start, epochDuration, 4);
-
-      // Claim reward
-      await lpFarmInstance.claimByIndex(
-        0,
-        { from: Alice, gasLimit: 4000000 }
-      );
-      await lpFarmInstance.claimByIndex(
-        0,
-        { from: Bob, gasLimit: 4000000 }
-      );
-
-      const dexfBalance1 = await callMethod(
-        dexfToken.methods.balanceOf,
-        [Alice]
-      );
-      const dexfBalance2 = await callMethod(
-        dexfToken.methods.balanceOf,
-        [Bob]
-      );
-
-      const totalBalance = new BigNumber(dexfBalance1).plus(new BigNumber(dexfBalance2));
-      const estimated = new BigNumber(FIRST_DAY_REWARD + SECOND_DAY_REWARD + THIRD_DAY_REWARD)
-        .times(new BigNumber(1E18));
-      assert.equal(totalBalance.gt(estimated.minus(new BigNumber(100))), true);
-      assert.equal(totalBalance.lt(estimated.plus(new BigNumber(100))), true);
-    });
-
-    it("Stake Erc20 token", async function () {
-      // Epoch 4
 
       // transfer Erc20 to Bob
       await erc20MockInstance.transfer(
@@ -324,6 +249,16 @@ contract("LPFarming", async (accounts) => {
 
       expect(new BigNumber(stakes[1]["amount"]).gt(0)).to.equal(true);
       expect(new BigNumber(stakes[1]["claimedAmount"]).eq(0)).to.equal(true);
+
+      totalMultiplier2 = await callMethod(
+        lpFarm.methods.totalMultipliers,
+        [4]
+      );
+
+      const currentBlockNumber = await new web3.eth.getBlockNumber();
+      const currentBlock = await new web3.eth.getBlock(currentBlockNumber);
+      const lastTimestamp = currentBlock.timestamp;
+      time2 = lastTimestamp;
     });
 
     it("Stake dexf", async function () {
@@ -367,6 +302,12 @@ contract("LPFarming", async (accounts) => {
 
       await moveAtEpoch(epoch1Start, epochDuration, 29);
 
+      let dexfBalance = await callMethod(
+        dexfToken.methods.balanceOf,
+        [Alice]
+      );
+      console.log("Log: Dexf balance before unstake => ", dexfBalance);
+
       const stakes = await callMethod(
         lpFarm.methods.getStakes,
         [Alice]
@@ -377,7 +318,13 @@ contract("LPFarming", async (accounts) => {
         { from: Alice, gasLimit: 4000000 }
       );
 
-      // Get Balance
+      dexfBalance = await callMethod(
+        dexfToken.methods.balanceOf,
+        [Alice]
+      );
+      console.log("Log: Dexf balance after unstake => ", dexfBalance);
+
+      // Get lp Balance
       const lpBalance = await callMethod(
         pairToken.methods.balanceOf,
         [Alice]
@@ -395,7 +342,39 @@ contract("LPFarming", async (accounts) => {
       expect(stakes1[0]["endEpochId"]).to.equal('28');
       expect(stakes[0]["lastClaimEpochId"]).to.not.equal('28');
       expect(stakes1[0]["lastClaimEpochId"]).to.equal('28');
+
+      totalMultiplier3 = await callMethod(
+        lpFarm.methods.totalMultipliers,
+        [29]
+      );
+
+      const currentBlockNumber = await new web3.eth.getBlockNumber();
+      const currentBlock = await new web3.eth.getBlock(currentBlockNumber);
+      const lastTimestamp = currentBlock.timestamp;
+      time3 = lastTimestamp;
     });
+
+    it("Prior multipliers", async function () {
+      const multiplier1 = await callMethod(
+        lpFarm.methods.getPriorTotalMultiplier,
+        [time1]
+      );
+      const multiplier2 = await callMethod(
+        lpFarm.methods.getPriorTotalMultiplier,
+        [time2]
+      );
+      const multiplier3 = await callMethod(
+        lpFarm.methods.getPriorTotalMultiplier,
+        [time3]
+      );
+
+      console.log("Log: Multiplier checkpoint1 => ", multiplier1);
+      console.log("Log: Multiplier checkpoint2 => ", multiplier2);
+      console.log("Log: Multiplier checkpoint3 => ", multiplier3);
+
+      expect(multiplier2).to.equal(totalMultiplier2);
+      expect(multiplier3).to.equal(totalMultiplier3);
+    })
 
     it("Unstake for closed stake", async function () {
       await truffleAssert.reverts(lpFarmInstance.unstake(
@@ -404,53 +383,5 @@ contract("LPFarming", async (accounts) => {
       ), "Farming: Already unstaked.");
     })
 
-    it("Claim all", async function () {
-      // Epoch 29
-
-      // stake 1 Eth for 4 weeks from Christian
-      await lpFarmInstance.stake(
-        '4',
-        { from: Christian, value: new BigNumber(1E18).toString(10) }
-      );
-      // stake 2 Eth for 20 weeks from Christian
-      await lpFarmInstance.stake(
-        '20',
-        { from: Christian, value: new BigNumber(1E18).toString(10) }
-      );
-
-      // move to epoch 30
-      await moveAtEpoch(epoch1Start, epochDuration, 30);
-
-      const claimAmount1 = await callMethod(
-        lpFarm.methods.getClaimAmountByIndex,
-        [Christian, 0]
-      );
-      const claimAmount2 = await callMethod(
-        lpFarm.methods.getClaimAmountByIndex,
-        [Christian, 1]
-      );
-      const sum = new BigNumber(claimAmount1[0]).plus(new BigNumber(claimAmount2[0]));
-
-      const totalClaimAmount = await callMethod(
-        lpFarm.methods.getTotalClaimAmount,
-        [Christian]
-      );
-
-      expect(new BigNumber(totalClaimAmount).eq(sum)).to.equal(true);
-
-      // claim reward
-      await lpFarmInstance.claim(
-        { from: Christian }
-      );
-
-      // Dexf balance of Christian
-      const balance = await callMethod(
-        dexfToken.methods.balanceOf,
-        [Christian]
-      );
-      expect(new BigNumber(balance).eq(sum)).to.equal(true);
-    });
-
   });
-
 });

@@ -1,21 +1,20 @@
 ## Dexf deploy guide
 
-1. deploy Dexf contract
-2. deploy LpFarm contract with dexf address param
-3. set staking contract address for dexf contract
+1. Check wbnb, busd, btcb, eth token address and epoch1 start, epoch duration for Dexf token contract and LP farming contract
+2. deploy Dexf contract
+3. deploy LpFarm contract with dexf address param
+4. set staking contract address for dexf contract
     call [setStakingContract] function
-4. set multipliers for lp farm contract
+5. set multipliers for lp farm contract
     call [setMultipliers] function
-5. add Dexf-BNB liquidity
-
-
+6. add Dexf-BNB liquidity(approve and call addLiquidityETH)
 
 ## Additional for testing
 
-6. deploy test token contract(BUSD)
-7. set busd address for lp farm contract
+7. deploy test token contract(BUSD)
+8. set busd address for lp farm contract
     call [changeTokenAddress] (param: address, 1)
-8. add BUSD-BNB liquidity
+9. add BUSD-BNB liquidity
 
 
 
@@ -27,12 +26,10 @@
 4. execute
 5. cancel
 
-
-
 ## Governor deploy guide
 
-1. Deploy timelock contract
-2. Deploy governor contract with timelock address
+1. Deploy timelock contract(for test case, check min delay)
+2. Deploy governor contract with timelock address(for test case, check votingPeriod)
 3. Change timelock admin to governorAlpha
 	- call queueTransaction for set pending Admin from current timelock admin
       timelockAddress, 0, "setPendingAdmin(address)", encodedAbi, eta

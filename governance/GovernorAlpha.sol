@@ -9,19 +9,13 @@ contract GovernorAlpha {
 
     /// @notice The number of votes in support of a proposal required in order for a quorum to be reached and for a vote to succeed
     function quorumVotes() public view returns (uint) {
-        uint128 currentEpoch = lpFarming.getCurrentEpoch();
-        uint256 totalMultiplier = lpFarming.totalMultipliers(currentEpoch);
-        require(currentEpoch > 0 && totalMultiplier > 0, "Dexf Governor: Invalid multiplier");
-
+        uint256 totalMultiplier = lpFarming.getPriorTotalMultiplier(0);
         return div256(mul256(totalMultiplier, 20), 100);
     } // 20% of total voting power
 
     /// @notice The number of votes required in order for a voter to become a proposer
     function proposalThreshold() public view returns (uint) {
-        uint128 currentEpoch = lpFarming.getCurrentEpoch();
-        uint256 totalMultiplier = lpFarming.totalMultipliers(currentEpoch);
-        require(currentEpoch > 0 && totalMultiplier > 0, "Dexf Governor: Invalid multiplier");
-
+        uint256 totalMultiplier = lpFarming.getPriorTotalMultiplier(0);
         return div256(mul256(totalMultiplier, 5), 100);
     } // 5% of voting power
 
@@ -148,7 +142,7 @@ contract GovernorAlpha {
     }
 
     function propose(address[] memory targets, uint[] memory values, string[] memory signatures, bytes[] memory calldatas, string memory description) public returns (uint) {
-        (, uint256 votingPower) = getVotingPower(msg.sender);
+        (, uint256 votingPower) = lpFarming.getPriorMultiplier(msg.sender, block.timestamp);
         require(votingPower > proposalThreshold(), "GovernorAlpha::propose: proposer votes below proposal threshold");
         require(targets.length == values.length && targets.length == signatures.length && targets.length == calldatas.length, "GovernorAlpha::propose: proposal function information arity mismatch");
         require(targets.length != 0, "GovernorAlpha::propose: must provide actions");
@@ -219,7 +213,7 @@ contract GovernorAlpha {
         require(state != ProposalState.Executed, "GovernorAlpha::cancel: cannot cancel executed proposal");
 
         Proposal storage proposal = proposals[proposalId];
-        (, uint256 votingPower) = getVotingPower(proposal.proposer);
+        (, uint256 votingPower) = lpFarming.getPriorMultiplier(proposal.proposer, block.timestamp);
         require(msg.sender == guardian || votingPower < proposalThreshold(), "GovernorAlpha::cancel: proposer above threshold");
 
         proposal.canceled = true;
@@ -242,13 +236,15 @@ contract GovernorAlpha {
     function state(uint proposalId) public view returns (ProposalState) {
         require(proposalCount >= proposalId && proposalId > 0, "GovernorAlpha::state: invalid proposal id");
         Proposal storage proposal = proposals[proposalId];
+        uint256 quorumVotes =  div256(mul256(lpFarming.getPriorTotalMultiplier(proposal.startTimestamp), 20), 100);
+
         if (proposal.canceled) {
             return ProposalState.Canceled;
         } else if (block.timestamp <= proposal.startTimestamp) {
             return ProposalState.Pending;
         } else if (block.timestamp <= proposal.endTimestamp) {
             return ProposalState.Active;
-        } else if (proposal.forVotes <= proposal.againstVotes || proposal.forVotes < quorumVotes()) {
+        } else if (proposal.forVotes <= proposal.againstVotes || proposal.forVotes < quorumVotes) {
             return ProposalState.Defeated;
         } else if (proposal.eta == 0) {
             return ProposalState.Succeeded;
@@ -279,7 +275,7 @@ contract GovernorAlpha {
         Proposal storage proposal = proposals[proposalId];
         Receipt storage receipt = proposal.receipts[voter];
         require(receipt.hasVoted == false, "GovernorAlpha::_castVote: voter already voted");
-        (, uint256 votes) = getVotingPower(voter);
+        (, uint256 votes) = lpFarming.getPriorMultiplier(voter, proposal.startTimestamp - 1);
 
         if (support) {
             proposal.forVotes = add256(proposal.forVotes, votes);
@@ -312,22 +308,6 @@ contract GovernorAlpha {
     function __executeSetTimelockPendingAdmin(address newPendingAdmin, uint eta) public {
         require(msg.sender == guardian, "GovernorAlpha::__executeSetTimelockPendingAdmin: sender must be gov guardian");
         timelock.executeTransaction(address(timelock), 0, "setPendingAdmin(address)", abi.encode(newPendingAdmin), eta);
-    }
-
-    function getVotingPower(address account) public view returns (uint256, uint256) {
-        uint128 currentEpoch = lpFarming.getCurrentEpoch();
-        uint256 totalMultiplier = lpFarming.totalMultipliers(currentEpoch);
-        require(currentEpoch > 0 && totalMultiplier > 0, "Dexf Governor: Invalid multiplier");
-
-        SharedStructs.Stake[] memory stakes = lpFarming.getStakes(account);
-        uint256 multiplier;
-        for (uint256 i; i < stakes.length; i++) {
-            if (stakes[i].endEpochId == 0) {
-                multiplier += mul256(stakes[i].amount, lpFarming.calcMultiplier(stakes[i].lockWeeks));
-            }
-        }
-
-        return (totalMultiplier, multiplier);
     }
 
     function add256(uint256 a, uint256 b) internal pure returns (uint) {
@@ -377,10 +357,8 @@ interface TimelockInterface {
 }
 
 interface LPFarmingInterface {
-    function getCurrentEpoch() external view returns (uint128);
-    function totalMultipliers(uint128 epoch) external view returns (uint256);
-    function getStakes(address account) external view returns (SharedStructs.Stake[] memory);
-    function calcMultiplier(uint256 numOfWeeks) external view returns (uint256);
+    function getPriorTotalMultiplier(uint256 timestamp) external view returns (uint256);
+    function getPriorMultiplier(address account, uint256 timestamp) external view returns (uint256, uint256);
 }
 
 library SharedStructs {
@@ -391,5 +369,7 @@ library SharedStructs {
         uint128 lockWeeks;
         uint256 claimedAmount;
         uint128 lastClaimEpochId;
+        uint256 startTimestamp;
+        uint256 endTimestamp;
     }
 }
