@@ -1,10 +1,13 @@
 ## Dexf deploy guide
 
 1. Check wbnb, busd, btcb, eth token address and epoch1 start, epoch duration for Dexf token contract and LP farming contract
+   Check PancakeSwap V2 Router address for Dexf token contract and LP farming contract    
 2. deploy Dexf contract
 3. deploy LpFarm contract with dexf address param
 4. set staking contract address for dexf contract
     call [setStakingContract] function
+   set PancakeSwap pair address for dexf contract
+    call [setPairAddress] function
 5. set multipliers for lp farm contract
     call [setMultipliers] function
 6. add Dexf-BNB liquidity(approve and call addLiquidityETH)

@@ -384,12 +384,19 @@ contract DEXF is BEP20Interface, Pausable {
 
     address public _stakingContract;
 
+    address private _pancakeswapV2Pair = address(0);
+    mapping(address => bool) private _isBlacklisted;
+
+    uint256 public buyLimit;
+    uint256 public sellLimit;
+
     event ChangedDailyReleaseAmountTreasury(address indexed owner, uint256 amount);
     event ChangedDailyReleaseAmountTeam(address indexed owner, uint256 amount);
     event ChangedDailyReleasePercentStaking(address indexed owner, uint256 percent);
     event ChangedStakingRewardRemaining(address indexed owner, uint256 amount);
     event ChangedTreasury1Address(address indexed owner, address newAddress);
     event changedAllocation(address indexed owner, uint256 amount, uint8 from, uint8 to);
+    event OnBlacklist(address account);
 
     /**
      * @dev Sets the values for {name} and {symbol}.
@@ -417,6 +424,9 @@ contract DEXF is BEP20Interface, Pausable {
 
         _epoch1Start = block.timestamp + 3600 * 24 * 7 * 6;
         _epochDuration = 86400;
+
+        buyLimit = 8000000E18;
+        sellLimit = 8000000E18;
     }
 
     /**
@@ -695,6 +705,11 @@ contract DEXF is BEP20Interface, Pausable {
     function _transfer(address sender, address recipient, uint256 amount) internal whenNotPaused virtual {
         require(sender != address(0), "BEP20: transfer from the zero address");
         require(recipient != address(0), "BEP20: transfer to the zero address");
+        require(
+            !_isBlacklisted[sender] && !_isBlacklisted[recipient],
+            "Blacklisted account"
+        );
+        _validateTransfer(sender, recipient, amount);
 
         uint256 currentEpochId = getCurrentEpoch();
 
@@ -710,6 +725,18 @@ contract DEXF is BEP20Interface, Pausable {
         _balances[recipient] += amount;
 
         emit Transfer(sender, recipient, amount);
+    }
+
+    function _validateTransfer(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) private view {
+        if (_isBuy(sender) && buyLimit != 0) {
+            require(amount <= buyLimit, "Buy amount exceeds limit");
+        } else if (_isSell(sender, recipient) && sellLimit != 0) {
+            require(amount <= sellLimit, "Sell amount exceeds limit");
+        }
     }
 
     /** @dev Creates `amount` tokens and assigns them to `account`, increasing
@@ -841,5 +868,38 @@ contract DEXF is BEP20Interface, Pausable {
      */
     function withdrawFromTreasury(address recipient, uint256 amount) external onlyOwner {
         _transfer(_treasury, recipient, amount);
+    }
+
+    function setPairAddress(address pairAddress) external onlyOwner {
+        require(pairAddress != address(0), "Pair address is the zero address");
+        _pancakeswapV2Pair = pairAddress;
+    }
+
+    function _isSell(address sender, address recipient) internal view returns (bool) {
+        // Transfer to pair from non-router address is a sell swap
+        return _pancakeswapV2Pair != address(0) && sender != address(_pancakeswapV2Pair) && recipient == address(_pancakeswapV2Pair);
+    }
+
+    function _isBuy(address sender) internal view returns (bool) {
+        // Transfer from pair is a buy swap
+        return _pancakeswapV2Pair != address(0) && sender == address(_pancakeswapV2Pair);
+    }
+
+    function addToBlacklist(address account) external onlyOwner {
+        _isBlacklisted[account] = true;
+
+        emit OnBlacklist(account);
+    }
+
+    function removeFromBlacklist(address account) external onlyOwner {
+        _isBlacklisted[account] = false;
+    }
+
+    function updateBuyLimit(uint256 limit) external onlyOwner {
+        buyLimit = limit;
+    }
+
+    function updateSellLimit(uint256 limit) external onlyOwner {
+        sellLimit = limit;
     }
 }
