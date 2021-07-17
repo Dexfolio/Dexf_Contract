@@ -16,9 +16,6 @@ const {
 }  =  require('./utils');
 
 const pancakeSwapV2RouterAddress = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
-const FIRST_DAY_REWARD = 68000;
-const SECOND_DAY_REWARD = 67932;
-const THIRD_DAY_REWARD = 67864.068;
 
 contract("LPFarming", async (accounts) => {
   const deployer = accounts[0];
@@ -33,6 +30,7 @@ contract("LPFarming", async (accounts) => {
   let dexfToken;
   let lpFarm;
   let pairToken;
+  let erc20Token;
   let epoch1Start;
   let epochDuration;
   let time1, time2, time3;
@@ -54,6 +52,7 @@ contract("LPFarming", async (accounts) => {
     dexfToken = await new web3.eth.Contract(dexfTokenABI.abi, dexfTokenInstance.address);
     lpFarm = await new web3.eth.Contract(lpFarmABI.abi, lpFarmInstance.address);
     pancakeSwapV2Router = await new web3.eth.Contract(pancakeSwapV2RouterABI.abi, pancakeSwapV2RouterAddress);
+    erc20Token = await new web3.eth.Contract(erc20MockABI.abi, erc20MockInstance.address);
 
     // set staking contract address for dexf
     await dexfTokenInstance.setStakingContract(
@@ -62,17 +61,10 @@ contract("LPFarming", async (accounts) => {
     );
 
     const pairAddress = await callMethod(
-      lpFarm.methods._dexfBNBV2Pair,
+      lpFarm.methods.dexfBNBV2Pair,
       []
     );
     pairToken = await new web3.eth.Contract(pairABI, pairAddress);
-
-    // set busd address
-    await lpFarmInstance.changeTokenAddress(
-      erc20MockInstance.address,
-      1,
-      { from: deployer }
-    );
 
     // set multipliers
     await lpFarmInstance.setMultipliers(
@@ -183,10 +175,34 @@ contract("LPFarming", async (accounts) => {
     it("Saves users stake in state", async function () {
       // Epoch 0
 
+      const bnbBalance = await new web3.eth.getBalance(lpFarmInstance.address);
+      const dexBalance = await callMethod(
+        dexfToken.methods.balanceOf,
+        [lpFarmInstance.address]
+      );
+
+      console.log("Log: Bnb balance of farming contract => ", bnbBalance);
+      console.log("Log: Dexf balance of farming contract => ", dexBalance);
+
       // stake 1 Eth for 4 weeks
       await lpFarmInstance.stake(
         '4',
         { from: Alice, value: new BigNumber(1E18).toString(10), gasLimit: 4000000 }
+      );
+
+      const bnbBalance1 = await new web3.eth.getBalance(lpFarmInstance.address);
+      const dexBalance1 = await callMethod(
+        dexfToken.methods.balanceOf,
+        [lpFarmInstance.address]
+      );
+
+      console.log("Log: Bnb balance of farming contract after stake => ", bnbBalance1);
+      console.log("Log: Dexf balance of farming contract after stake => ", dexBalance1);
+
+      // stake 2 Eth for 5 weeks
+      await lpFarmInstance.stake(
+        '5',
+        { from: Alice, value: new BigNumber(2E18).toString(10), gasLimit: 4000000 }
       );
 
       const stakes = await callMethod(
@@ -194,7 +210,7 @@ contract("LPFarming", async (accounts) => {
         [Alice]
       );
 
-      expect(stakes.length).to.be.equal(1);
+      expect(stakes.length).to.be.equal(2);
       assert.isAbove(Number(stakes[0]["amount"]), 0, 'Stake amount is greater than 0');
     });
 
@@ -207,6 +223,21 @@ contract("LPFarming", async (accounts) => {
         0,
         { from: Alice, gasLimit: 4000000 }
       ), "Farming: Lock is not finished.");
+    });
+
+    it("Emergency withdraw", async function () {
+      await lpFarmInstance.emergencyWithdraw(
+        1,
+        { from: Alice, gasLimit: 4000000 }
+      );
+
+      const stakes = await callMethod(
+        lpFarm.methods.getStakes,
+        [Alice]
+      );
+
+      expect(stakes.length).to.be.equal(2);
+      assert.isAbove(Number(stakes[1]["endTimestamp"]), 0, 'End timestamp is not 0');
     });
 
     it("Stake Erc20 token", async function () {
@@ -234,6 +265,21 @@ contract("LPFarming", async (accounts) => {
         new BigNumber(1E18).toString(10),
         { from: Bob }
       );
+
+      const bnbBalance = await new web3.eth.getBalance(lpFarmInstance.address);
+      const dexBalance = await callMethod(
+        dexfToken.methods.balanceOf,
+        [lpFarmInstance.address]
+      );
+      const erc20Balance = await callMethod(
+        erc20Token.methods.balanceOf,
+        [lpFarmInstance.address]
+      );
+
+      console.log("Log: Bnb balance of farming contract => ", bnbBalance);
+      console.log("Log: Dexf balance of farming contract => ", dexBalance);
+      console.log("Log: Erc20 balance of farming contract => ", erc20Balance);
+
       // stake Erc20 from Bob
       await lpFarmInstance.stakeToken(
         erc20MockInstance.address,
@@ -241,6 +287,20 @@ contract("LPFarming", async (accounts) => {
         '4',
         { from: Bob }
       );
+
+      const bnbBalance1 = await new web3.eth.getBalance(lpFarmInstance.address);
+      const dexBalance1 = await callMethod(
+        dexfToken.methods.balanceOf,
+        [lpFarmInstance.address]
+      );
+      const erc20Balance1 = await callMethod(
+        erc20Token.methods.balanceOf,
+        [lpFarmInstance.address]
+      );
+
+      console.log("Log: Bnb balance of farming contract after stake => ", bnbBalance1);
+      console.log("Log: Dexf balance of farming contract after stake => ", dexBalance1);
+      console.log("Log: Erc20 balance of farming contract after stake => ", erc20Balance1);
 
       const stakes = await callMethod(
         lpFarm.methods.getStakes,
@@ -331,7 +391,8 @@ contract("LPFarming", async (accounts) => {
       );
       console.log("Log: Lp balance of Bob => ", lpBalance);
 
-      expect(stakes[0]["amount"]).to.equal(lpBalance);
+      const lpAmount = new BigNumber(stakes[0]["amount"]).plus(new BigNumber(stakes[1]["amount"]));
+      expect(lpAmount.toString(10)).to.equal(lpBalance);
 
       const stakes1 = await callMethod(
         lpFarm.methods.getStakes,
@@ -379,6 +440,16 @@ contract("LPFarming", async (accounts) => {
     it("Unstake for closed stake", async function () {
       await truffleAssert.reverts(lpFarmInstance.unstake(
         0,
+        { from: Alice, gasLimit: 4000000 }
+      ), "Farming: Already unstaked.");
+
+      await truffleAssert.reverts(lpFarmInstance.unstake(
+        1,
+        { from: Alice, gasLimit: 4000000 }
+      ), "Farming: Already unstaked.");
+
+      await truffleAssert.reverts(lpFarmInstance.emergencyWithdraw(
+        1,
         { from: Alice, gasLimit: 4000000 }
       ), "Farming: Already unstaked.");
     })

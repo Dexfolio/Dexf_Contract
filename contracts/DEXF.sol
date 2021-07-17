@@ -322,6 +322,19 @@ interface BEP20Interface {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
+interface IPancakeSwapV2Factory {
+    function getPair(address tokenA, address tokenB) external view returns (address pair);
+    function createPair(address tokenA, address tokenB) external returns (address pair);
+}
+
+interface IPancakeSwapV2Router01 {
+    function factory() external pure returns (address);
+    function WETH() external pure returns (address);
+}
+
+interface IPancakeSwapV2Router02 is IPancakeSwapV2Router01 {
+}
+
 /**
  * @dev Implementation of the {BEP20} interface.
  *
@@ -364,17 +377,17 @@ contract DEXF is BEP20Interface, Pausable {
     address public constant _stakingPool = 0x31501F2B86cc3485093df368C813be7b8e700b38;
     address public _treasury1 = address(0);
 
-    uint256 public _DAILY_RELEASE_AMOUNT_TREASURY;
-    uint256 public _DAILY_RELEASE_AMOUNT_TEAM;
+    uint256 public DAILY_RELEASE_AMOUNT_TREASURY;
+    uint256 public DAILY_RELEASE_AMOUNT_TEAM;
 
-    uint256 public _DAILY_RELEASE_PERCENT_STAKING;
-    uint256 public _stakingRewardRemaining;
+    uint256 public DAILY_RELEASE_PERCENT_STAKING;
+    uint256 public stakingRewardRemaining;
 
-    uint256 public _treasuryAvailable;
-    uint256 public _teamAvailable;
-    uint256 public _stakingAvailable;
+    uint256 public treasuryAvailable;
+    uint256 public teamAvailable;
+    uint256 public stakingAvailable;
 
-    mapping (uint256 => uint256) public _dailyStakingRewards;
+    mapping (uint256 => uint256) public dailyStakingRewards;
 
     uint256 public _epoch1Start;
 
@@ -382,21 +395,27 @@ contract DEXF is BEP20Interface, Pausable {
 
     uint256 public _lastInitializedEpoch;
 
-    address public _stakingContract;
+    address public stakingContract = address(0);
 
-    address private _pancakeswapV2Pair = address(0);
+    address public pancakeswapV2Pair;
     mapping(address => bool) private _isBlacklisted;
 
     uint256 public buyLimit;
     uint256 public sellLimit;
 
+    uint256 public taxFee = 3;
+
     event ChangedDailyReleaseAmountTreasury(address indexed owner, uint256 amount);
-    event ChangedDailyReleaseAmountTeam(address indexed owner, uint256 amount);
     event ChangedDailyReleasePercentStaking(address indexed owner, uint256 percent);
     event ChangedStakingRewardRemaining(address indexed owner, uint256 amount);
     event ChangedTreasury1Address(address indexed owner, address newAddress);
     event changedAllocation(address indexed owner, uint256 amount, uint8 from, uint8 to);
-    event OnBlacklist(address account);
+    event AddedToBlacklist(address account);
+    event RemovedFromBlacklist(address account);
+    event UpdatedBuyLimit(uint256 limit);
+    event UpdatedSellLimit(uint256 limit);
+    event ClaimedStakingReward(address recipient, uint256 amount);
+    event InitializedEpoch(uint256 epochId);
 
     /**
      * @dev Sets the values for {name} and {symbol}.
@@ -417,54 +436,58 @@ contract DEXF is BEP20Interface, Pausable {
         _mint(_team, 20000000E18); // 20M
         _mint(_stakingPool, 68000000E18); // 68M
 
-        _DAILY_RELEASE_AMOUNT_TREASURY = 72000000E18 / uint256(3647); // 3647 days
-        _DAILY_RELEASE_AMOUNT_TEAM = 20000000E18 / uint256(104); // 104 days
-        _DAILY_RELEASE_PERCENT_STAKING = 10;
-        _stakingRewardRemaining = 68000000E18;
+        DAILY_RELEASE_AMOUNT_TREASURY = 72000000E18 / uint256(3647); // 3647 days
+        DAILY_RELEASE_AMOUNT_TEAM = 20000000E18 / uint256(104); // 104 days
+        DAILY_RELEASE_PERCENT_STAKING = 10;
+        stakingRewardRemaining = 68000000E18;
 
-        _epoch1Start = block.timestamp + 3600 * 24 * 7 * 6;
-        _epochDuration = 86400;
+        _epoch1Start = block.timestamp + 1 weeks;
+        _epochDuration = 24 hours;
 
         buyLimit = 8000000E18;
         sellLimit = 8000000E18;
+
+        IPancakeSwapV2Router02 _pancakeswapV2Router = IPancakeSwapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+        address pair = IPancakeSwapV2Factory(_pancakeswapV2Router.factory())
+            .getPair(address(this), _pancakeswapV2Router.WETH());
+        if (pair != address(0)) {
+            pancakeswapV2Pair = pair;
+        } else {
+            pancakeswapV2Pair = address(IPancakeSwapV2Factory(_pancakeswapV2Router.factory())
+                .createPair(address(this), _pancakeswapV2Router.WETH()));
+        }
     }
 
     /**
      * @dev Sets daily release amount of treasury.
      */
     function setDailyReleaseAmountTreasury(uint256 dailyReleaseAmount) external onlyOwner {
-        _DAILY_RELEASE_AMOUNT_TREASURY = dailyReleaseAmount;
+        DAILY_RELEASE_AMOUNT_TREASURY = dailyReleaseAmount;
         emit ChangedDailyReleaseAmountTreasury(_msgSender(), dailyReleaseAmount);
-    }
-
-    /**
-     * @dev Sets daily release amount of team.
-     */
-    function setDailyReleaseAmountTeam(uint256 dailyReleaseAmount) external onlyOwner {
-        _DAILY_RELEASE_AMOUNT_TEAM = dailyReleaseAmount;
-        emit ChangedDailyReleaseAmountTeam(_msgSender(), dailyReleaseAmount);
     }
 
     /**
      * @dev Sets daily release percent for staking reward.
      */
     function setDailyReleasePercentStaking(uint256 percent) external onlyOwner {
-        _DAILY_RELEASE_PERCENT_STAKING = percent;
+        DAILY_RELEASE_PERCENT_STAKING = percent;
         emit ChangedDailyReleasePercentStaking(_msgSender(), percent);
     }
 
     /**
      * @dev Sets staking contract address.
      */
-    function setStakingContract(address stakingContract) external onlyOwner {
-        _stakingContract = address(stakingContract);
+    function setStakingContract(address stakingContractAddr) external onlyOwner {
+        require(stakingContract == address(0), "Dexf: Staking contract already initialized");
+
+        stakingContract = address(stakingContractAddr);
     }
 
     /**
      * @dev Sets staking contract address.
      */
     function setStakingRewardRemaining(uint256 remainingAmount) external onlyOwner {
-        _stakingRewardRemaining = remainingAmount;
+        stakingRewardRemaining = remainingAmount;
         emit ChangedStakingRewardRemaining(_msgSender(), remainingAmount);
     }
 
@@ -481,6 +504,13 @@ contract DEXF is BEP20Interface, Pausable {
      */
     function setEpoch1Start(uint256 epochStartTime) external onlyOwner {
         _epoch1Start = epochStartTime;
+    }
+
+    /**
+     * @dev Set tax fee percent. Call by only owner.
+     */
+    function setTaxFee(uint256 fee) external onlyOwner {
+        taxFee = fee;
     }
 
     /**
@@ -519,16 +549,16 @@ contract DEXF is BEP20Interface, Pausable {
         _balances[toAddress] += amount;
 
         if (fromAddress == _stakingPool) {
-            _stakingRewardRemaining = _stakingRewardRemaining.sub(amount);
+            stakingRewardRemaining = stakingRewardRemaining.sub(amount);
         } else if (toAddress == _stakingPool) {
-            _stakingRewardRemaining = _stakingRewardRemaining.add(amount);
+            stakingRewardRemaining = stakingRewardRemaining.add(amount);
         }
 
         emit changedAllocation(_msgSender(), amount, from, to);
     }
 
     function getDailyStakingReward(uint256 day) external view returns (uint256) {
-        return _dailyStakingRewards[day];
+        return dailyStakingRewards[day];
     }
 
     function getDailyStakingRewardAfterEpochInit(uint256 day) external returns (uint256) {
@@ -537,7 +567,7 @@ contract DEXF is BEP20Interface, Pausable {
             _initEpoch(currentEpochId);
         }
 
-        return _dailyStakingRewards[day];
+        return dailyStakingRewards[day];
     }
 
     /**
@@ -722,7 +752,14 @@ contract DEXF is BEP20Interface, Pausable {
         uint256 senderBalance = _balances[sender];
         require(senderBalance >= amount, "BEP20: transfer amount exceeds balance");
         _balances[sender] = senderBalance - amount;
-        _balances[recipient] += amount;
+
+        uint256 feeAmount = 0;
+        if (taxFee != 0 && sender != owner() && recipient != owner() && sender != address(_stakingPool) && recipient != address(stakingContract)) {
+            feeAmount = amount.mul(taxFee).div(100);
+        }
+        _balances[_stakingPool] = _balances[_stakingPool].add(feeAmount);
+        stakingRewardRemaining = stakingRewardRemaining.add(feeAmount);
+        _balances[recipient] += amount.sub(feeAmount);
 
         emit Transfer(sender, recipient, amount);
     }
@@ -732,9 +769,9 @@ contract DEXF is BEP20Interface, Pausable {
         address recipient,
         uint256 amount
     ) private view {
-        if (_isBuy(sender) && buyLimit != 0) {
+        if (sender != owner() && _isBuy(sender) && buyLimit != 0) {
             require(amount <= buyLimit, "Buy amount exceeds limit");
-        } else if (_isSell(sender, recipient) && sellLimit != 0) {
+        } else if (sender != owner() && recipient != owner() && _isSell(sender, recipient) && sellLimit != 0) {
             require(amount <= sellLimit, "Sell amount exceeds limit");
         }
     }
@@ -813,13 +850,13 @@ contract DEXF is BEP20Interface, Pausable {
             require(currentEpochId > 0, "BEP20: locked yet");
 
             if (sender == _treasury) {
-                _treasuryAvailable = _treasuryAvailable.sub(amount);
+                treasuryAvailable = treasuryAvailable.sub(amount);
             }
             if (sender == _team) {
-                _teamAvailable = _teamAvailable.sub(amount);
+                teamAvailable = teamAvailable.sub(amount);
             }
             if (sender == _stakingPool) {
-                _stakingAvailable = _stakingAvailable.sub(amount);
+                stakingAvailable = stakingAvailable.sub(amount);
             }
         }
     }
@@ -840,14 +877,16 @@ contract DEXF is BEP20Interface, Pausable {
         require(epochId > _lastInitializedEpoch, "Already initialized");
 
         for (uint256 i = _lastInitializedEpoch + 1; i <= epochId; i++) {
-            _treasuryAvailable = _treasuryAvailable.add(_DAILY_RELEASE_AMOUNT_TREASURY);
-            _teamAvailable = _teamAvailable.add(_DAILY_RELEASE_AMOUNT_TEAM);
+            treasuryAvailable = treasuryAvailable.add(DAILY_RELEASE_AMOUNT_TREASURY);
+            teamAvailable = teamAvailable.add(DAILY_RELEASE_AMOUNT_TEAM);
 
-            _dailyStakingRewards[i] = _stakingRewardRemaining.mul(_DAILY_RELEASE_PERCENT_STAKING).div(10000);
-            _stakingAvailable = _stakingAvailable.add(_dailyStakingRewards[i]);
-            _stakingRewardRemaining = _stakingRewardRemaining.sub(_dailyStakingRewards[i]);
+            dailyStakingRewards[i] = stakingRewardRemaining.mul(DAILY_RELEASE_PERCENT_STAKING).div(10000);
+            stakingAvailable = stakingAvailable.add(dailyStakingRewards[i]);
+            stakingRewardRemaining = stakingRewardRemaining.sub(dailyStakingRewards[i]);
         }
         _lastInitializedEpoch = epochId;
+
+        emit InitializedEpoch(epochId);
     }
 
     function manualEpochInit(uint128 epochId) public {
@@ -858,48 +897,44 @@ contract DEXF is BEP20Interface, Pausable {
      * @dev Claim reward from staking pool
      */
     function claimStakingReward(address recipient, uint256 amount) external {
-        require(_msgSender() == _stakingContract, "Dexf: No staking contract");
+        require(_msgSender() == stakingContract, "Dexf: No staking contract");
 
         _transfer(_stakingPool, recipient, amount);
-    }
 
-    /**
-     * @dev Withdraw from treasury
-     */
-    function withdrawFromTreasury(address recipient, uint256 amount) external onlyOwner {
-        _transfer(_treasury, recipient, amount);
-    }
-
-    function setPairAddress(address pairAddress) external onlyOwner {
-        require(pairAddress != address(0), "Pair address is the zero address");
-        _pancakeswapV2Pair = pairAddress;
+        emit ClaimedStakingReward(recipient, amount);
     }
 
     function _isSell(address sender, address recipient) internal view returns (bool) {
         // Transfer to pair from non-router address is a sell swap
-        return _pancakeswapV2Pair != address(0) && sender != address(_pancakeswapV2Pair) && recipient == address(_pancakeswapV2Pair);
+        return sender != address(pancakeswapV2Pair) && recipient == address(pancakeswapV2Pair);
     }
 
     function _isBuy(address sender) internal view returns (bool) {
         // Transfer from pair is a buy swap
-        return _pancakeswapV2Pair != address(0) && sender == address(_pancakeswapV2Pair);
+        return sender == address(pancakeswapV2Pair);
     }
 
     function addToBlacklist(address account) external onlyOwner {
         _isBlacklisted[account] = true;
 
-        emit OnBlacklist(account);
+        emit AddedToBlacklist(account);
     }
 
     function removeFromBlacklist(address account) external onlyOwner {
         _isBlacklisted[account] = false;
+
+        emit RemovedFromBlacklist(account);
     }
 
     function updateBuyLimit(uint256 limit) external onlyOwner {
         buyLimit = limit;
+
+        emit UpdatedBuyLimit(limit);
     }
 
     function updateSellLimit(uint256 limit) external onlyOwner {
         sellLimit = limit;
+
+        emit UpdatedSellLimit(limit);
     }
 }

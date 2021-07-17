@@ -62,17 +62,10 @@ contract("Governance", async (accounts) => {
     );
 
     const pairAddress = await callMethod(
-      lpFarm.methods._dexfBNBV2Pair,
+      lpFarm.methods.dexfBNBV2Pair,
       []
     );
     pairToken = await new web3.eth.Contract(pairABI, pairAddress);
-
-    // set busd address
-    await lpFarmInstance.changeTokenAddress(
-      erc20MockInstance.address,
-      1,
-      { from: deployer }
-    );
 
     // set multipliers
     await lpFarmInstance.setMultipliers(
@@ -307,7 +300,7 @@ contract("Governance", async (accounts) => {
       );
 
       const releaseAmount = await callMethod(
-        dexfToken.methods._DAILY_RELEASE_AMOUNT_TREASURY,
+        dexfToken.methods.DAILY_RELEASE_AMOUNT_TREASURY,
         []
       );
       expect(releaseAmount).to.be.equal(new BigNumber(1000E18).toString(10));

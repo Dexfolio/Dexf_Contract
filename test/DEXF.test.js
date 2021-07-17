@@ -2,7 +2,6 @@ const DexfToken = artifacts.require('DEXF');
 const PancakeSwapV2Router = artifacts.require('PancakeSwapV2Router');
 const dexfTokenABI = require('./abis/DEXF.json');
 const pancakeSwapV2RouterABI = require('./abis/PancakeSwapV2Router.json');
-const pancakeSwapV2FactoryABI = require('./abis/PancakeSwapV2Factory.json');
 const truffleAssert = require('truffle-assertions');
 const BigNumber = require('bignumber.js');
 
@@ -21,21 +20,18 @@ contract("DEXF", async (accounts) => {
   let pancakeSwapV2RouterInstance;
   let dexfToken;
   let pancakeSwapV2Router;
-  let pancakeSwapV2Factory;
 
   let _treasury;
   let _team;
   let _stakingPool;
 
   let WETHAddr;
-  let pairAddr;
 
   before(async () => {
     dexfTokenInstance = await DexfToken.at(dexfTokenABI.address);
     pancakeSwapV2RouterInstance = await PancakeSwapV2Router.at(pancakeSwapV2RouterABI.address);
     dexfToken = await new web3.eth.Contract(dexfTokenABI.abi, dexfTokenInstance.address);
     pancakeSwapV2Router = await new web3.eth.Contract(pancakeSwapV2RouterABI.abi, pancakeSwapV2RouterABI.address);
-    pancakeSwapV2Factory = await new web3.eth.Contract(pancakeSwapV2FactoryABI.abi, pancakeSwapV2FactoryABI.address);
 
     _treasury = await callMethod(
       dexfToken.methods._treasury,
@@ -80,15 +76,6 @@ contract("DEXF", async (accounts) => {
       deployer,
       lastTimestamp + 1000,
       { from: deployer, value: bnbAmount }
-    );
-
-    pairAddr = await callMethod(
-      pancakeSwapV2Factory.methods.getPair,
-      [WETHAddr, dexfTokenInstance.address]
-    );
-    await dexfTokenInstance.setPairAddress(
-      pairAddr,
-      { from: deployer }
     );
   })
 
@@ -159,7 +146,7 @@ contract("DEXF", async (accounts) => {
       expect(new BigNumber(balanceOfStakingPool).eq(new BigNumber(78000000E18))).to.be.equal(true);
 
       const stakingRewardRemaining = await callMethod(
-        dexfToken.methods._stakingRewardRemaining,
+        dexfToken.methods.stakingRewardRemaining,
         []
       );
       expect(new BigNumber(stakingRewardRemaining).eq(new BigNumber(78000000E18))).to.be.equal(true);
@@ -186,7 +173,7 @@ contract("DEXF", async (accounts) => {
       expect(new BigNumber(balanceOfStakingPool).eq(new BigNumber(48000000E18))).to.be.equal(true);
 
       const stakingRewardRemaining = await callMethod(
-        dexfToken.methods._stakingRewardRemaining,
+        dexfToken.methods.stakingRewardRemaining,
         []
       );
       expect(new BigNumber(stakingRewardRemaining).eq(new BigNumber(48000000E18))).to.be.equal(true);
@@ -295,10 +282,16 @@ contract("DEXF", async (accounts) => {
       const currentBlock = await new web3.eth.getBlock(currentBlockNumber);
       const lastTimestamp = currentBlock.timestamp;
 
+      await dexfTokenInstance.transfer(
+        Christian,
+        new BigNumber(200000E18).toString(10),
+        { from: deployer }
+      );
+
       await dexfTokenInstance.approve(
         pancakeSwapV2RouterABI.address,
         new BigNumber(500000E18).toString(10),
-        { from: deployer }
+        { from: Christian }
       );
 
       const path = [dexfTokenABI.address, WETHAddr];
@@ -308,20 +301,20 @@ contract("DEXF", async (accounts) => {
           new BigNumber(100001E18).toString(10),
           0,
           path,
-          deployer,
+          Christian,
           lastTimestamp + 1000,
-          { from: deployer }
+          { from: Christian }
         ),
         "TransferHelper: TRANSFER_FROM_FAILED"
       );
 
-      await pancakeSwapV2RouterInstance.swapExactTokensForETH(
+      await pancakeSwapV2RouterInstance.swapExactTokensForETHSupportingFeeOnTransferTokens(
         new BigNumber(1000E18).toString(10),
         0,
         path,
-        deployer,
+        Christian,
         lastTimestamp + 1000,
-        { from: deployer }
+        { from: Christian }
       );
     })
 

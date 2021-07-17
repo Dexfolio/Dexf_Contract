@@ -24,10 +24,6 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-interface TokenInterface is IERC20 {
-    function withdraw(uint wad) external;
-}
-
 abstract contract Ownable is Context {
     address private _owner;
 
@@ -255,7 +251,7 @@ interface IPancakeSwapV2Router02 is IPancakeSwapV2Router01 {
     ) external payable;
 }
 
-interface DexfToken is IERC20 {
+interface IDexfToken is IERC20 {
     function getDailyStakingReward(
         uint256 day
     ) external view returns (uint256);
@@ -315,92 +311,42 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
 
     address private _team;
 
-    DexfToken public _dexf;
+    IDexfToken public _dexf;
 
-    TokenInterface public _wbnb;
-    TokenInterface public _busd;
-    TokenInterface public _btcb;
-    TokenInterface public _eth;
-
-    IPancakeSwapV2Pair public _dexfBNBV2Pair;
+    IPancakeSwapV2Pair public dexfBNBV2Pair;
     IPancakeSwapV2Router02 private _pancakeswapV2Router;
 
-    mapping (uint256 => uint256) public _dailyStakingRewards;
-    uint256 public _lastInitializedRewardDay;
-    uint256 public _totalRewardDistributed;
+    mapping (uint256 => uint256) public dailyStakingRewards;
+    uint256 public totalRewardDistributed;
 
     uint16[100] private _multipliers;
 
-    event ChangedDexfAddress(address indexed owner, address indexed dexf);
-    event ChangedDexfBNBPair(address indexed owner, address indexed pair);
-    event ChangedTokenAddress(address indexed owner, address tokenAddress, uint8 tokenNumber);
-
     event Staked(address indexed account, uint256 amount);
     event Unstaked(address indexed account, uint256 amount);
+    event EmergencyWithdraw(address indexed account, uint128 index, uint256 amount);
     event ClaimedReward(address indexed owner, uint256 amount);
     event Received(address sender, uint amount);
     event ManualEpochInit(address indexed caller, uint128 indexed epochId);
-
     event SwapAndLiquifyFromBNB(address indexed msgSender, uint256 totAmount, uint256 bnbAmount, uint256 amount);
 
     constructor(address dexf) {
-        _dexf = DexfToken(dexf);
-
-        _wbnb = TokenInterface(0xc778417E063141139Fce010982780140Aa0cD5Ab);
-        _busd = TokenInterface(0xE5575Eaf9b51A30EC7fCCa4588195f313CF151fe);
-        _btcb = TokenInterface(0x495180b00BaBCeaeB8963C6AA3a154DDC514e1B6);
-        _eth = TokenInterface(0x29DF3E182b7a84DaA1c0a7b34885807DD3052CE0);
+        _dexf = IDexfToken(dexf);
 
         _pancakeswapV2Router = IPancakeSwapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
         // Create a Pancakeswap pair for dexf
         address pair = IPancakeSwapV2Factory(_pancakeswapV2Router.factory())
             .getPair(address(_dexf), _pancakeswapV2Router.WETH());
         if (pair != address(0)) {
-            _dexfBNBV2Pair = IPancakeSwapV2Pair(pair);
+            dexfBNBV2Pair = IPancakeSwapV2Pair(pair);
         } else {
-            _dexfBNBV2Pair = IPancakeSwapV2Pair(IPancakeSwapV2Factory(_pancakeswapV2Router.factory())
+            dexfBNBV2Pair = IPancakeSwapV2Pair(IPancakeSwapV2Factory(_pancakeswapV2Router.factory())
                 .createPair(address(_dexf), _pancakeswapV2Router.WETH()));
         }
 
-        _epoch1Start = block.timestamp + 3600 * 24 * 7 * 6;
-        _epochDuration = 86400;
+        _epoch1Start = block.timestamp + 1 weeks;
+        _epochDuration = 24 hours;
 
         _team = msg.sender;
-    }
-
-    /**
-     * @dev Change Dexf token contract address. Call by only owner.
-     */
-    function changeDexfAddress(address dexf) external onlyOwner {
-        _dexf = DexfToken(dexf);
-
-        emit ChangedDexfAddress(_msgSender(), dexf);
-    }
-
-    /**
-     * @dev Change staking token contract address. Call by only owner.
-     */
-    function changeTokenAddress(address tokenAddress, uint8 tokenNum) external onlyOwner {
-        if (tokenNum == 0) {
-            _wbnb = TokenInterface(tokenAddress);
-        } else if (tokenNum == 1) {
-            _busd = TokenInterface(tokenAddress);
-        } else if (tokenNum == 2) {
-            _btcb = TokenInterface(tokenAddress);
-        } else {
-            _eth = TokenInterface(tokenAddress);
-        }
-
-        emit ChangedTokenAddress(_msgSender(), tokenAddress, tokenNum);
-    }
-
-    /**
-     * @dev Change LP token contract address. Call by only owner.
-     */
-    function changeDexfBNBPair(address dexfBNBV2Pair) external onlyOwner {
-        _dexfBNBV2Pair = IPancakeSwapV2Pair(dexfBNBV2Pair);
-
-        emit ChangedDexfBNBPair(_msgSender(), dexfBNBV2Pair);
     }
 
     /**
@@ -453,13 +399,9 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
                 totalMultipliers[i] = totalMultipliers[i - 1];
             }
 
-            for (uint256 j = _lastInitializedRewardDay + 1; j <= i; j++) {
-                uint256 rewardForDay = _dexf.getDailyStakingRewardAfterEpochInit(j);
-                if (rewardForDay > 0) {
-                    _dailyStakingRewards[j] = rewardForDay;
-                    _lastInitializedRewardDay = j;
-                }
-            }
+            uint256 rewardForDay = _dexf.getDailyStakingRewardAfterEpochInit(i);
+            require(rewardForDay > 0, "Farming: invalid reward");
+            dailyStakingRewards[i] = rewardForDay;
         }
         lastInitializedEpoch = epochId;
     }
@@ -489,6 +431,9 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
     function addLiquidityBNB(uint256 tokenAmount, uint256 bnbAmount) private {
         _dexf.approve(address(_pancakeswapV2Router), tokenAmount);
 
+        uint256 initialBnbAmount = address(this).balance.sub(bnbAmount);
+        uint256 initialTokenAmount = _dexf.balanceOf(address(this)).sub(tokenAmount);
+
         // add the liquidity
         _pancakeswapV2Router.addLiquidityETH{value: bnbAmount}(
             address(_dexf),
@@ -498,6 +443,15 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
             address(this),
             block.timestamp
         );
+
+        uint256 bnbBalance = address(this).balance;
+        uint256 tokenBalance = _dexf.balanceOf(address(this));
+        if (bnbBalance > initialBnbAmount) {
+            _msgSender().send(bnbBalance.sub(initialBnbAmount));
+        }
+        if (tokenBalance > initialTokenAmount) {
+            _dexf.transfer(_msgSender(), tokenBalance.sub(initialTokenAmount));
+        }
     }
 
     function swapAndLiquifyFromBNB(uint256 amount) private returns (bool) {
@@ -621,11 +575,11 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         require(lockWeeks >= MIN_LOCK_DURATION && lockWeeks <= MAX_LOCK_DURATION, "Farming: Invalid lock duration");
 
         // Check Initial Balance
-        uint256 initialBalance = _dexfBNBV2Pair.balanceOf(address(this));
+        uint256 initialBalance = dexfBNBV2Pair.balanceOf(address(this));
 
         require(swapAndLiquifyFromBNB(msg.value), "Farming: Failed to get LP tokens.");
 
-        uint256 newBalance = _dexfBNBV2Pair.balanceOf(address(this)).sub(initialBalance);
+        uint256 newBalance = dexfBNBV2Pair.balanceOf(address(this)).sub(initialBalance);
 
         uint128 currentEpochId = getCurrentEpoch();
 
@@ -665,11 +619,11 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         _dexf.transferFrom(_msgSender(), address(this), tokenAmount);
 
         // Check Initial Balance
-        uint256 initialBalance = _dexfBNBV2Pair.balanceOf(address(this));
+        uint256 initialBalance = dexfBNBV2Pair.balanceOf(address(this));
 
         require(swapAndLiquifyFromDexf(tokenAmount), "Farming: Failed to get LP tokens.");
 
-        uint256 newBalance = _dexfBNBV2Pair.balanceOf(address(this)).sub(initialBalance);
+        uint256 newBalance = dexfBNBV2Pair.balanceOf(address(this)).sub(initialBalance);
 
         uint128 currentEpochId = getCurrentEpoch();
 
@@ -713,11 +667,11 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         IERC20(fromTokenAddress).transferFrom(_msgSender(), address(this), tokenAmount);
 
         // Check Initial Balance
-        uint256 initialBalance = _dexfBNBV2Pair.balanceOf(address(this));
+        uint256 initialBalance = dexfBNBV2Pair.balanceOf(address(this));
 
         require(swapAndLiquifyFromToken(fromTokenAddress, tokenAmount), "Farming: Failed to get LP tokens.");
 
-        uint256 newBalance = _dexfBNBV2Pair.balanceOf(address(this)).sub(initialBalance);
+        uint256 newBalance = dexfBNBV2Pair.balanceOf(address(this)).sub(initialBalance);
 
         uint128 currentEpochId = getCurrentEpoch();
 
@@ -754,7 +708,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         require(lockWeeks >= MIN_LOCK_DURATION && lockWeeks <= MAX_LOCK_DURATION, "Farming: Invalid lock duration");
 
         // Transfer token to Contract
-        _dexfBNBV2Pair.transferFrom(_msgSender(), address(this), amount);
+        dexfBNBV2Pair.transferFrom(_msgSender(), address(this), amount);
 
         uint128 currentEpochId = getCurrentEpoch();
 
@@ -798,24 +752,20 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         if (lastInitializedEpoch < currentEpochId) {
             _initEpoch(currentEpochId);
         }
-        require(stakes[index].endEpochId == 0, "Farming: Already unstaked");
+        require(stakes[index].endTimestamp == 0, "Farming: Already unstaked");
         require(currentEpochId > 1 && currentEpochId > stakes[index].startEpochId, "Farming: Invalid unstake.");
         require(currentEpochId > stakes[index].startEpochId + stakes[index].lockWeeks * 7,
             "Farming: Lock is not finished."
         );
 
         // Transfer token to user
-        _dexfBNBV2Pair.transfer(_msgSender(), stakes[index].amount);
+        dexfBNBV2Pair.transfer(_msgSender(), stakes[index].amount);
 
         stakes[index].endEpochId = currentEpochId - 1;
         stakes[index].endTimestamp = block.timestamp;
         totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].sub(stakes[index].amount.mul(calcMultiplier(stakes[index].lockWeeks)));
 
-        if (numCheckpoints == 0) {
-            checkpoints[0].timestamp = block.timestamp;
-            checkpoints[0].multiplier = totalMultipliers[currentEpochId];
-            numCheckpoints = 1;
-        } else if (checkpoints[numCheckpoints - 1].timestamp == block.timestamp) {
+        if (checkpoints[numCheckpoints - 1].timestamp == block.timestamp) {
             checkpoints[numCheckpoints - 1].multiplier = totalMultipliers[currentEpochId];
         } else {
             checkpoints[numCheckpoints].timestamp = block.timestamp;
@@ -829,6 +779,35 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         emit Unstaked(_msgSender(), stakes[index].amount);
 
         return true;
+    }
+
+    /**
+     * @dev Withdraw without caring about rewards. EMERGENCY ONLY.
+     */
+    function emergencyWithdraw(uint128 index) external {
+        require(!isContract(_msgSender()), "Farming: Could not be contract.");
+
+        Stake[] storage stakes = _stakes[_msgSender()];
+
+        require(stakes.length > index && index >= 0, "Farming: Invalid index.");
+        require(stakes[index].endTimestamp == 0, "Farming: Already unstaked");
+
+        // Transfer token to user
+        dexfBNBV2Pair.transfer(_msgSender(), stakes[index].amount);
+
+        stakes[index].endEpochId = stakes[index].startEpochId;
+        stakes[index].endTimestamp = block.timestamp;
+        totalMultipliers[lastInitializedEpoch] = totalMultipliers[lastInitializedEpoch].sub(stakes[index].amount.mul(calcMultiplier(stakes[index].lockWeeks)));
+
+        if (checkpoints[numCheckpoints - 1].timestamp == block.timestamp) {
+            checkpoints[numCheckpoints - 1].multiplier = totalMultipliers[lastInitializedEpoch];
+        } else {
+            checkpoints[numCheckpoints].timestamp = block.timestamp;
+            checkpoints[numCheckpoints].multiplier = totalMultipliers[lastInitializedEpoch];
+            numCheckpoints++;
+        }
+
+        emit EmergencyWithdraw(_msgSender(), index, stakes[index].amount);
     }
 
     function getTotalClaimAmount(address account) public view returns (uint256) {
@@ -857,13 +836,13 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         uint256 total;
         uint128 lastEpochId = stakes[index].endEpochId > 0 ? stakes[index].endEpochId : currentEpochId - 1;
         for (uint128 i = stakes[index].lastClaimEpochId + 1; i <= lastEpochId; i++) {
-            if (totalMultipliers[i] == 0 || _dailyStakingRewards[uint256(i)] == 0) {
+            if (totalMultipliers[i] == 0 || dailyStakingRewards[uint256(i)] == 0) {
                 lastEpochId = i - 1;
                 break;
             }
 
             total = total.add(
-                _dailyStakingRewards[uint256(i)].mul(
+                dailyStakingRewards[uint256(i)].mul(
                     stakes[index].amount.mul(calcMultiplier(stakes[index].lockWeeks))
                 ).div(
                     totalMultipliers[i]
@@ -884,7 +863,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         require(total > 0, "Farming: Invalid claim");
 
         _dexf.claimStakingReward(_msgSender(), total);
-        _totalRewardDistributed = _totalRewardDistributed.add(total);
+        totalRewardDistributed = totalRewardDistributed.add(total);
 
         Stake[] storage stakes = _stakes[_msgSender()];
         stakes[index].claimedAmount = stakes[index].claimedAmount + total;
@@ -946,57 +925,6 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         uint256 totalMultiplier = getPriorTotalMultiplier(timestamp);
 
         return (totalMultiplier, multiplier);
-    }
-
-    function removeOddTokens() external returns (bool) {
-        require(_msgSender() == _team, "Invalid team address");
-
-        uint256 wbnbOdd = _wbnb.balanceOf(address(this));
-        uint256 dexfOdd = _dexf.balanceOf(address(this));
-        uint256 busdOdd = _busd.balanceOf(address(this));
-        uint256 btcbOdd = _btcb.balanceOf(address(this));
-        uint256 wethOdd = _eth.balanceOf(address(this));
-
-        if (wbnbOdd > 0) {
-            _wbnb.withdraw(wbnbOdd);
-        }
-
-        if (dexfOdd > 0) {
-            _dexf.transfer(_msgSender(), dexfOdd);
-        }
-
-        if (busdOdd > 0) {
-            _busd.transfer(_msgSender(), busdOdd);
-        }
-
-        if (btcbOdd > 0) {
-            _btcb.transfer(_msgSender(), btcbOdd);
-        }
-
-        if (wethOdd > 0) {
-            _eth.withdraw(wethOdd);
-        }
-
-        uint256 bnbOdd = address(this).balance;
-        if (bnbOdd > 0) {
-            msg.sender.transfer(bnbOdd);
-        }
-
-        return true;
-    }
-
-    function safeDexfTransfer(address to, uint256 amount) internal returns (uint256) {
-        uint256 bal = _dexf.balanceOf(address(this));
-
-        if (amount > bal) {
-            _dexf.transfer(to, bal);
-
-            return bal;
-        }
-
-        _dexf.transfer(to, amount);
-
-        return amount;
     }
 
     function isContract(address account) internal view returns (bool) {
