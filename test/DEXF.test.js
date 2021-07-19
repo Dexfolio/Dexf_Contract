@@ -93,36 +93,15 @@ contract("DEXF", async (accounts) => {
     });
 
     it('Change allocation from treasury to team', async() => {
-      let balanceOfTreasury = await callMethod(
-        dexfToken.methods.balanceOf,
-        [_treasury]
+      await truffleAssert.reverts(
+        dexfTokenInstance.changeAllocation(
+          new BigNumber(10000000E18).toString(10),
+          0,
+          1,
+          { from: deployer }
+        ),
+        "Dexf: Invalid allocation"
       );
-      let balanceOfTeam = await callMethod(
-        dexfToken.methods.balanceOf,
-        [_team]
-      );
-
-      expect(new BigNumber(balanceOfTreasury).eq(new BigNumber(72000000E18))).to.be.equal(true);
-      expect(new BigNumber(balanceOfTeam).eq(new BigNumber(20000000E18))).to.be.equal(true);
-
-      await dexfTokenInstance.changeAllocation(
-        new BigNumber(10000000E18).toString(10),
-        0,
-        1,
-        { from: deployer }
-      );
-
-      balanceOfTreasury = await callMethod(
-        dexfToken.methods.balanceOf,
-        [_treasury]
-      );
-      balanceOfTeam = await callMethod(
-        dexfToken.methods.balanceOf,
-        [_team]
-      );
-
-      expect(new BigNumber(balanceOfTreasury).eq(new BigNumber(62000000E18))).to.be.equal(true);
-      expect(new BigNumber(balanceOfTeam).eq(new BigNumber(30000000E18))).to.be.equal(true); 
     });
 
     it('Change allocation from treasury to staking pool', async() => {
@@ -142,7 +121,7 @@ contract("DEXF", async (accounts) => {
         [_stakingPool]
       );
 
-      expect(new BigNumber(balanceOfTreasury).eq(new BigNumber(52000000E18))).to.be.equal(true);
+      expect(new BigNumber(balanceOfTreasury).eq(new BigNumber(62000000E18))).to.be.equal(true);
       expect(new BigNumber(balanceOfStakingPool).eq(new BigNumber(78000000E18))).to.be.equal(true);
 
       const stakingRewardRemaining = await callMethod(
@@ -152,11 +131,11 @@ contract("DEXF", async (accounts) => {
       expect(new BigNumber(stakingRewardRemaining).eq(new BigNumber(78000000E18))).to.be.equal(true);
     });
 
-    it('Change allocation from staking pool to team', async() => {
+    it('Change allocation from team to staking pool', async() => {
       await dexfTokenInstance.changeAllocation(
-          new BigNumber(30000000E18).toString(10),
-          2,
+          new BigNumber(10000000E18).toString(10),
           1,
+          2,
           { from: deployer }
       );
 
@@ -169,14 +148,14 @@ contract("DEXF", async (accounts) => {
         [_stakingPool]
       );
 
-      expect(new BigNumber(balanceOfTeam).eq(new BigNumber(60000000E18))).to.be.equal(true);
-      expect(new BigNumber(balanceOfStakingPool).eq(new BigNumber(48000000E18))).to.be.equal(true);
+      expect(new BigNumber(balanceOfTeam).eq(new BigNumber(10000000E18))).to.be.equal(true);
+      expect(new BigNumber(balanceOfStakingPool).eq(new BigNumber(88000000E18))).to.be.equal(true);
 
       const stakingRewardRemaining = await callMethod(
         dexfToken.methods.stakingRewardRemaining,
         []
       );
-      expect(new BigNumber(stakingRewardRemaining).eq(new BigNumber(48000000E18))).to.be.equal(true);
+      expect(new BigNumber(stakingRewardRemaining).eq(new BigNumber(88000000E18))).to.be.equal(true);
     });
 
     it('Revert Set treasury1 from Alice', async function () {
