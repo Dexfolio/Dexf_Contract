@@ -393,11 +393,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         require(epochId > lastInitializedEpoch, "Already initialized");
 
         for (uint128 i = lastInitializedEpoch + 1; i <= epochId; i++) {
-            if (i == 0) {
-                totalMultipliers[i] = 0;
-            } else {
-                totalMultipliers[i] = totalMultipliers[i - 1];
-            }
+            totalMultipliers[i] = totalMultipliers[i - 1];
 
             uint256 rewardForDay = _dexf.getDailyStakingRewardAfterEpochInit(i);
             require(rewardForDay > 0, "Farming: invalid reward");
@@ -447,7 +443,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         uint256 bnbBalance = address(this).balance;
         uint256 tokenBalance = _dexf.balanceOf(address(this));
         if (bnbBalance > initialBnbAmount) {
-            _msgSender().send(bnbBalance.sub(initialBnbAmount));
+            _msgSender().transfer(bnbBalance.sub(initialBnbAmount));
         }
         if (tokenBalance > initialTokenAmount) {
             _dexf.transfer(_msgSender(), tokenBalance.sub(initialTokenAmount));

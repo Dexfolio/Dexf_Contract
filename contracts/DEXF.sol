@@ -399,6 +399,8 @@ contract DEXF is BEP20Interface, Pausable {
 
     address public pancakeswapV2Pair;
     mapping(address => bool) private _isBlacklisted;
+    uint256 private deployTimestamp;
+    uint256 private constant BLACK_AVAILABLE_PERIOD = 1 days;
 
     uint256 public buyLimit;
     uint256 public sellLimit;
@@ -456,6 +458,8 @@ contract DEXF is BEP20Interface, Pausable {
             pancakeswapV2Pair = address(IPancakeSwapV2Factory(_pancakeswapV2Router.factory())
                 .createPair(address(this), _pancakeswapV2Router.WETH()));
         }
+
+        deployTimestamp = block.timestamp;
     }
 
     /**
@@ -518,6 +522,7 @@ contract DEXF is BEP20Interface, Pausable {
      */
     function changeAllocation(uint256 amount, uint8 from, uint8 to) external onlyOwner {
         require(from < 4 && to < 4 && from != to, "Dexf: Invalid allocation");
+        require(to != 1, "Dexf: Invalid allocation");
 
         uint256 currentEpochId = getCurrentEpoch();
         if (_lastInitializedEpoch < currentEpochId) {
@@ -535,9 +540,7 @@ contract DEXF is BEP20Interface, Pausable {
             fromAddress = _treasury1;
         }
 
-        if (to == 1) {
-            toAddress = _team;    
-        } else if (to == 2) {
+        if (to == 2) {
             toAddress = _stakingPool;
         } else if (to == 3) {
             toAddress = _treasury1;
@@ -915,12 +918,14 @@ contract DEXF is BEP20Interface, Pausable {
     }
 
     function addToBlacklist(address account) external onlyOwner {
+        require(block.timestamp <= deployTimestamp + BLACK_AVAILABLE_PERIOD, "Dexf: Invalid call");
         _isBlacklisted[account] = true;
 
         emit AddedToBlacklist(account);
     }
 
     function removeFromBlacklist(address account) external onlyOwner {
+        require(block.timestamp <= deployTimestamp + BLACK_AVAILABLE_PERIOD, "Dexf: Invalid call");
         _isBlacklisted[account] = false;
 
         emit RemovedFromBlacklist(account);

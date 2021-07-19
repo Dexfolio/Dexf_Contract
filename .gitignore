@@ -3,3 +3,6 @@ contracts/artifacts/
 build/
 start.sh
 package-lock.json
+test/abis/DEXF.json
+test/abis/erc20.json
+test/abis/lpFarm.json
