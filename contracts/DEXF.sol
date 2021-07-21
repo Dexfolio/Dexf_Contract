@@ -335,6 +335,14 @@ interface IPancakeSwapV2Router01 {
 interface IPancakeSwapV2Router02 is IPancakeSwapV2Router01 {
 }
 
+abstract contract BPContract{
+    function protect(
+        address sender, 
+        address receiver, 
+        uint256 amount
+    ) external virtual;
+}
+
 /**
  * @dev Implementation of the {BEP20} interface.
  *
@@ -400,12 +408,15 @@ contract DEXF is BEP20Interface, Pausable {
     address public pancakeswapV2Pair;
     mapping(address => bool) private _isBlacklisted;
     uint256 private deployTimestamp;
-    uint256 private constant BLACK_AVAILABLE_PERIOD = 1 days;
+    uint256 private constant BLACK_AVAILABLE_PERIOD = 5 hours;
 
     uint256 public buyLimit;
     uint256 public sellLimit;
 
     uint256 public taxFee = 3;
+
+    BPContract public BP;
+    bool public bpEnabled;
 
     event ChangedDailyReleaseAmountTreasury(address indexed owner, uint256 amount);
     event ChangedDailyReleasePercentStaking(address indexed owner, uint256 percent);
@@ -446,8 +457,8 @@ contract DEXF is BEP20Interface, Pausable {
         _epoch1Start = block.timestamp + 1 weeks;
         _epochDuration = 24 hours;
 
-        buyLimit = 8000000E18;
-        sellLimit = 8000000E18;
+        buyLimit = 200000E18;
+        sellLimit = 200000E18;
 
         IPancakeSwapV2Router02 _pancakeswapV2Router = IPancakeSwapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
         address pair = IPancakeSwapV2Factory(_pancakeswapV2Router.factory())
@@ -558,6 +569,14 @@ contract DEXF is BEP20Interface, Pausable {
         }
 
         emit changedAllocation(_msgSender(), amount, from, to);
+    }
+
+    function setBPAddrss(address _bp) external onlyOwner {
+        BP = BPContract(_bp);
+    }
+
+    function setBpEnabled(bool _enabled) external onlyOwner {
+        bpEnabled = _enabled;
     }
 
     function getDailyStakingReward(uint256 day) external view returns (uint256) {
@@ -743,6 +762,10 @@ contract DEXF is BEP20Interface, Pausable {
             "Blacklisted account"
         );
         _validateTransfer(sender, recipient, amount);
+
+        if (bpEnabled) {
+            BP.protect(sender, recipient, amount);
+        }
 
         uint256 currentEpochId = getCurrentEpoch();
 
