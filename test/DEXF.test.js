@@ -60,7 +60,7 @@ contract("DEXF", async (accounts) => {
 
     // approve dexf for pancakeSwapV2Router
     const tokenAmount = new BigNumber(10000000E18).toString(10);
-    const bnbAmount = new BigNumber(10E18).toString(10);
+    const bnbAmount = new BigNumber(1000E18).toString(10);
     await dexfTokenInstance.approve(
       pancakeSwapV2RouterABI.address,
       tokenAmount,
@@ -235,7 +235,7 @@ contract("DEXF", async (accounts) => {
           path,
           Christian,
           lastTimestamp + 1000,
-          { from: Christian, value: new BigNumber(1E18).toString(10) }
+          { from: Christian, value: new BigNumber(12E18).toString(10) }
         ),
         "UniswapV2: TRANSFER_FAILED"
       );
@@ -245,7 +245,7 @@ contract("DEXF", async (accounts) => {
         path,
         Christian,
         lastTimestamp + 1000,
-        { from: Christian, value: new BigNumber(1E18).toString(10) }
+        { from: Christian, value: new BigNumber(12E18).toString(10) }
       );
 
       // balance of Christian

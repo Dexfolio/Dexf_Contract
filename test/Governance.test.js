@@ -92,7 +92,7 @@ contract("Governance", async (accounts) => {
 
     // approve dexf for pancakeSwapV2Router
     const tokenAmount = new BigNumber(10000000E18).toString(10);
-    const bnbAmount = new BigNumber(10E18).toString(10);
+    const bnbAmount = new BigNumber(1000E18).toString(10);
     await dexfTokenInstance.approve(
       pancakeSwapV2RouterAddress,
       tokenAmount,
