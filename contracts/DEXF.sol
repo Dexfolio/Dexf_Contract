@@ -796,9 +796,9 @@ contract DEXF is BEP20Interface, Pausable {
         address recipient,
         uint256 amount
     ) private view {
-        if (sender != owner() && _isBuy(sender) && buyLimit != 0) {
+        if (sender != owner() && _isBuy(sender)) {
             require(amount <= buyLimit, "Buy amount exceeds limit");
-        } else if (sender != owner() && recipient != owner() && _isSell(sender, recipient) && sellLimit != 0) {
+        } else if (sender != owner() && recipient != owner() && _isSell(sender, recipient)) {
             require(amount <= sellLimit, "Sell amount exceeds limit");
         }
     }

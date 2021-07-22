@@ -532,33 +532,6 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         return swapAndLiquifyFromBNB(BNBAmount);
     }
 
-    function swapTokensForTokens(
-        address fromTokenAddress,
-        address toTokenAddress,
-        uint256 tokenAmount,
-        address receivedAddress
-    ) private returns (bool) {
-        address[] memory path = new address[](2);
-        path[0] = fromTokenAddress;
-        path[1] = toTokenAddress;
-
-        IERC20(fromTokenAddress).approve(
-            address(_pancakeswapV2Router),
-            tokenAmount
-        );
-
-        // make the swap
-        _pancakeswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            tokenAmount,
-            0, // accept any amount of pair token
-            path,
-            receivedAddress,
-            block.timestamp
-        );
-
-        return true;
-    }
-
     receive() external payable {
         emit Received(msg.sender, msg.value);
     }
