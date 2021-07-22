@@ -525,6 +525,7 @@ contract DEXF is BEP20Interface, Pausable {
      * @dev Set tax fee percent. Call by only owner.
      */
     function setTaxFee(uint256 fee) external onlyOwner {
+        require(fee <= 10, "Dexf: Invalid tax fee");
         taxFee = fee;
     }
 
@@ -780,7 +781,7 @@ contract DEXF is BEP20Interface, Pausable {
         _balances[sender] = senderBalance - amount;
 
         uint256 feeAmount = 0;
-        if (taxFee != 0 && sender != owner() && recipient != owner() && sender != address(_stakingPool) && recipient != address(stakingContract)) {
+        if (taxFee != 0 && sender != owner() && recipient != owner() && sender != address(_stakingPool)) {
             feeAmount = amount.mul(taxFee).div(100);
         }
         _balances[_stakingPool] = _balances[_stakingPool].add(feeAmount);
@@ -942,6 +943,8 @@ contract DEXF is BEP20Interface, Pausable {
 
     function addToBlacklist(address account) external onlyOwner {
         require(block.timestamp <= deployTimestamp + BLACK_AVAILABLE_PERIOD, "Dexf: Invalid call");
+        require(account != address(pancakeswapV2Pair), "Dexf: Invalid address");
+
         _isBlacklisted[account] = true;
 
         emit AddedToBlacklist(account);
@@ -955,12 +958,14 @@ contract DEXF is BEP20Interface, Pausable {
     }
 
     function updateBuyLimit(uint256 limit) external onlyOwner {
+        require(limit >= 7000E18, "Dexf: invalid limit");
         buyLimit = limit;
 
         emit UpdatedBuyLimit(limit);
     }
 
     function updateSellLimit(uint256 limit) external onlyOwner {
+        require(limit >= 7000E18, "Dexf: invalid limit");
         sellLimit = limit;
 
         emit UpdatedSellLimit(limit);

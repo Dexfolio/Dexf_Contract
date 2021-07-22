@@ -612,12 +612,14 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         require(lockWeeks >= MIN_LOCK_DURATION && lockWeeks <= MAX_LOCK_DURATION, "Farming: Invalid lock duration");
 
         // Transfer token to Contract
+        uint256 beforeAmount = _dexf.balanceOf(address(this));
         _dexf.transferFrom(_msgSender(), address(this), tokenAmount);
+        uint256 afterAmount = _dexf.balanceOf(address(this));
 
         // Check Initial Balance
         uint256 initialBalance = dexfBNBV2Pair.balanceOf(address(this));
 
-        require(swapAndLiquifyFromDexf(tokenAmount), "Farming: Failed to get LP tokens.");
+        require(swapAndLiquifyFromDexf(afterAmount.sub(beforeAmount)), "Farming: Failed to get LP tokens.");
 
         uint256 newBalance = dexfBNBV2Pair.balanceOf(address(this)).sub(initialBalance);
 
@@ -660,12 +662,14 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
         require(lockWeeks >= MIN_LOCK_DURATION && lockWeeks <= MAX_LOCK_DURATION, "Farming: Invalid lock duration");
 
         // Transfer token to Contract
+        uint256 beforeAmount = IERC20(fromTokenAddress).balanceOf(address(this));
         IERC20(fromTokenAddress).transferFrom(_msgSender(), address(this), tokenAmount);
+        uint256 afterAmount = IERC20(fromTokenAddress).balanceOf(address(this));
 
         // Check Initial Balance
         uint256 initialBalance = dexfBNBV2Pair.balanceOf(address(this));
 
-        require(swapAndLiquifyFromToken(fromTokenAddress, tokenAmount), "Farming: Failed to get LP tokens.");
+        require(swapAndLiquifyFromToken(fromTokenAddress, afterAmount.sub(beforeAmount)), "Farming: Failed to get LP tokens.");
 
         uint256 newBalance = dexfBNBV2Pair.balanceOf(address(this)).sub(initialBalance);
 
