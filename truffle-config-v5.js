@@ -1,5 +1,5 @@
 var HDWalletProvider = require("truffle-hdwallet-provider");
-const MNEMONIC = 'b361b586cfeb49f955de49015008c8fa128b261ade84cfc102785ce55e35271e';
+const MNEMONIC = '';
 
 module.exports = {
   networks: {

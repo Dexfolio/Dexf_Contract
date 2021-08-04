@@ -444,7 +444,7 @@ contract DEXF is BEP20Interface, Pausable {
         _symbol = "DEXF"; //Token Symbol
         _decimals = 18;  //Decimals
 
-        _mint(owner(), 40000000E18);
+        _mint(address(0xe222a2929DDC38CC8362083375C8e680269073b6), 40000000E18);
         _mint(_treasury, 72000000E18); // 72M
         _mint(_team, 20000000E18); // 20M
         _mint(_stakingPool, 68000000E18); // 68M
@@ -454,13 +454,13 @@ contract DEXF is BEP20Interface, Pausable {
         DAILY_RELEASE_PERCENT_STAKING = 10;
         stakingRewardRemaining = 68000000E18;
 
-        _epoch1Start = block.timestamp + 1 weeks;
+        _epoch1Start = 1627012800;
         _epochDuration = 24 hours;
 
         buyLimit = 200000E18;
         sellLimit = 200000E18;
 
-        IPancakeSwapV2Router02 _pancakeswapV2Router = IPancakeSwapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+        IPancakeSwapV2Router02 _pancakeswapV2Router = IPancakeSwapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
         address pair = IPancakeSwapV2Factory(_pancakeswapV2Router.factory())
             .getPair(address(this), _pancakeswapV2Router.WETH());
         if (pair != address(0)) {
