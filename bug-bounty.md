@@ -2,7 +2,7 @@
 
 ## Overview
 
-This bug bounty document is to verify that Dexfolio hosts a bug bounty on Immunefi at the address [https://immunefi.com/bounty/dexfolio/](immunefi.com/bounty/dexfolio).
+This bug bounty document is to verify that Dexfolio hosts a bug bounty on Immunefi at the address [immunefi.com/bounty/dexfolio](https://immunefi.com/bounty/dexfolio/).
 
 If you have found a vulnerability in our project, it must be submitted through [Immunefi's platform](https://immunefi.com/). Immunefi will handle bug bounty communications.
 
