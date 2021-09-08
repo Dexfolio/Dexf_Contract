@@ -1,5 +1,6 @@
 const DexfToken = artifacts.require('DEXF');
 const LpFarm = artifacts.require('LPFarming');
+const LPFarmingUpgradeableProxy = artifacts.require('LPFarmingUpgradeableProxy');
 const PancakeSwapV2Router = artifacts.require('PancakeSwapV2Router');
 const Erc20Mock = artifacts.require('ERC20Mock');
 const GovernorAlpha = artifacts.require('GovernorAlpha');
@@ -28,6 +29,7 @@ contract("Governance", async (accounts) => {
   const Alice = accounts[1];
   const Bob = accounts[2];
   const Christian = accounts[3];
+  const ProxyAdmin = accounts[9];
 
   let dexfTokenInstance;
   let lpFarmInstance; 
@@ -44,9 +46,33 @@ contract("Governance", async (accounts) => {
   let epochDuration;
 
   before(async () => {
+    const abiEncodeData = web3.eth.abi.encodeFunctionCall({
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "dexf",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "name": "initialize",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }, [
+      dexfTokenABI.address, deployer
+    ]);
+
     // Get contract instance
     dexfTokenInstance = await DexfToken.at(dexfTokenABI.address);
-    lpFarmInstance = await LpFarm.at(lpFarmABI.address);
+    // lpFarmInstance = await LpFarm.at(lpFarmABI.address);
+    const lpFarmImplementation = await LpFarm.new({ from: deployer });
+    const proxyInstance = await LPFarmingUpgradeableProxy.new(lpFarmImplementation.address, ProxyAdmin, abiEncodeData, { from: deployer });
+    lpFarmInstance = await LpFarm.at(proxyInstance.address);
     pancakeSwapV2RouterInstance = await PancakeSwapV2Router.at(pancakeSwapV2RouterABI.address);
     erc20MockInstance = await Erc20Mock.at(erc20MockABI.address);
 

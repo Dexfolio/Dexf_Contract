@@ -1,5 +1,6 @@
 const DexfToken = artifacts.require('DEXF');
 const LpFarm = artifacts.require('LPFarming');
+const LPFarmingUpgradeableProxy = artifacts.require('LPFarmingUpgradeableProxy');
 const PancakeSwapV2Router = artifacts.require('PancakeSwapV2Router');
 const Erc20Mock = artifacts.require('ERC20Mock');
 const dexfTokenABI = require('./abis/DEXF.json');
@@ -21,12 +22,13 @@ contract("LPFarming", async (accounts) => {
   const deployer = accounts[0];
   const Alice = accounts[1];
   const Bob = accounts[2];
-  const Christian = accounts[3];
+  const ProxyAdmin = accounts[9];
 
   let dexfTokenInstance;
   let lpFarmInstance; 
   let pancakeSwapV2RouterInstance;
   let erc20MockInstance;
+  let proxyInstance;
   let dexfToken;
   let lpFarm;
   let pairToken;
@@ -42,9 +44,32 @@ contract("LPFarming", async (accounts) => {
     // dexfTokenInstance = await DexfToken.new({ from: deployer });
     // lpFarmInstance = await LpFarm.new(dexfTokenInstance.address, { from: deployer });
 
+    const abiEncodeData = web3.eth.abi.encodeFunctionCall({
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "dexf",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "name": "initialize",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }, [
+      dexfTokenABI.address, deployer
+    ]);
+
     // Get contract instance
     dexfTokenInstance = await DexfToken.at(dexfTokenABI.address);
-    lpFarmInstance = await LpFarm.at(lpFarmABI.address);
+    proxyInstance = await LPFarmingUpgradeableProxy.new(lpFarmABI.address, ProxyAdmin, abiEncodeData, { from: deployer });
+    lpFarmInstance = await LpFarm.at(proxyInstance.address);
+    // lpFarmInstance = await LpFarm.at(lpFarmABI.address);
     pancakeSwapV2RouterInstance = await PancakeSwapV2Router.at(pancakeSwapV2RouterABI.address);
     erc20MockInstance = await Erc20Mock.at(erc20MockABI.address);
 
@@ -321,37 +346,6 @@ contract("LPFarming", async (accounts) => {
       time2 = lastTimestamp;
     });
 
-    it("Stake dexf", async function () {
-      // Epoch 4
-
-      // transfer Dext from deployer to Bob
-      await dexfTokenInstance.transfer(
-        Bob,
-        new BigNumber(100E18).toString(10),
-        { from: deployer }
-      );
-
-      // approve dexf for LP Farming contract
-      await dexfTokenInstance.approve(
-        lpFarmInstance.address,
-        new BigNumber(100E18).toString(10),
-        { from: Bob }
-      );
-      // stake Dexf from Bob
-      await lpFarmInstance.stakeDexf(
-        new BigNumber(100E18).toString(10),
-        '4',
-        { from: Bob }
-      );
-
-      const stakes = await callMethod(
-        lpFarm.methods.getStakes,
-        [Bob]
-      );
-
-      expect(new BigNumber(stakes[2]["amount"]).gt(0)).to.equal(true);
-    });
-
     it("Unstake", async function () {
       await moveAtEpoch(epoch1Start, epochDuration, 28);
 
@@ -452,6 +446,15 @@ contract("LPFarming", async (accounts) => {
         1,
         { from: Alice, gasLimit: 4000000 }
       ), "Farming: Already unstaked.");
+    })
+
+    it("Change implementation", async function () {
+      const newImplementationInstance = await LpFarm.new({ from: deployer });
+      await proxyInstance.upgradeTo(newImplementationInstance.address, { from: ProxyAdmin });
+      await lpFarmInstance.stake(
+        '4',
+        { from: Alice, value: new BigNumber(1E18).toString(10), gasLimit: 4000000 }
+      );      
     })
 
   });

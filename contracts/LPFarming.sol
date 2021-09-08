@@ -30,9 +30,11 @@ abstract contract Ownable is Context {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     constructor () {
-        address msgSender = _msgSender();
-        _owner = msgSender;
-        emit OwnershipTransferred(address(0), msgSender);
+    }
+
+    function initOwner(address ownerAddr) internal {
+        _owner = ownerAddr;
+        emit OwnershipTransferred(address(0), ownerAddr);
     }
 
     function owner() public view returns (address) {
@@ -63,6 +65,9 @@ abstract contract ReentrancyGuard {
     uint256 private _status;
 
     constructor () {
+    }
+
+    function initGuard() internal {
         _status = _NOT_ENTERED;
     }
 
@@ -125,6 +130,119 @@ library SafeMath {
     function mod(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
         require(b != 0, errorMessage);
         return a % b;
+    }
+}
+
+library Address {
+
+    function isContract(address account) internal view returns (bool) {
+        // This method relies on extcodesize, which returns 0 for contracts in
+        // construction, since the code is only stored at the end of the
+        // constructor execution.
+
+        uint256 size;
+        // solhint-disable-next-line no-inline-assembly
+        assembly { size := extcodesize(account) }
+        return size > 0;
+    }
+
+    function sendValue(address payable recipient, uint256 amount) internal {
+        require(address(this).balance >= amount, "Address: insufficient balance");
+
+        // solhint-disable-next-line avoid-low-level-calls, avoid-call-value
+        (bool success, ) = recipient.call{ value: amount }("");
+        require(success, "Address: unable to send value, recipient may have reverted");
+    }
+
+    function functionCall(address target, bytes memory data) internal returns (bytes memory) {
+      return functionCall(target, data, "Address: low-level call failed");
+    }
+
+    function functionCall(address target, bytes memory data, string memory errorMessage) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, 0, errorMessage);
+    }
+
+    function functionCallWithValue(address target, bytes memory data, uint256 value) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, value, "Address: low-level call with value failed");
+    }
+
+    function functionCallWithValue(address target, bytes memory data, uint256 value, string memory errorMessage) internal returns (bytes memory) {
+        require(address(this).balance >= value, "Address: insufficient balance for call");
+        require(isContract(target), "Address: call to non-contract");
+
+        // solhint-disable-next-line avoid-low-level-calls
+        (bool success, bytes memory returndata) = target.call{ value: value }(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    function functionStaticCall(address target, bytes memory data) internal view returns (bytes memory) {
+        return functionStaticCall(target, data, "Address: low-level static call failed");
+    }
+
+    function functionStaticCall(address target, bytes memory data, string memory errorMessage) internal view returns (bytes memory) {
+        require(isContract(target), "Address: static call to non-contract");
+
+        // solhint-disable-next-line avoid-low-level-calls
+        (bool success, bytes memory returndata) = target.staticcall(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    function functionDelegateCall(address target, bytes memory data) internal returns (bytes memory) {
+        return functionDelegateCall(target, data, "Address: low-level delegate call failed");
+    }
+
+    function functionDelegateCall(address target, bytes memory data, string memory errorMessage) internal returns (bytes memory) {
+        require(isContract(target), "Address: delegate call to non-contract");
+
+        // solhint-disable-next-line avoid-low-level-calls
+        (bool success, bytes memory returndata) = target.delegatecall(data);
+        return _verifyCallResult(success, returndata, errorMessage);
+    }
+
+    function _verifyCallResult(bool success, bytes memory returndata, string memory errorMessage) private pure returns(bytes memory) {
+        if (success) {
+            return returndata;
+        } else {
+            // Look for revert reason and bubble it up if present
+            if (returndata.length > 0) {
+                // The easiest way to bubble the revert reason is using memory via assembly
+
+                // solhint-disable-next-line no-inline-assembly
+                assembly {
+                    let returndata_size := mload(returndata)
+                    revert(add(32, returndata), returndata_size)
+                }
+            } else {
+                revert(errorMessage);
+            }
+        }
+    }
+}
+
+abstract contract Initializable {
+
+    bool private _initialized;
+
+    bool private _initializing;
+
+    modifier initializer() {
+        require(_initializing || _isConstructor() || !_initialized, "Initializable: contract is already initialized");
+
+        bool isTopLevelCall = !_initializing;
+        if (isTopLevelCall) {
+            _initializing = true;
+            _initialized = true;
+        }
+
+        _;
+
+        if (isTopLevelCall) {
+            _initializing = false;
+        }
+    }
+
+    function _isConstructor() private view returns (bool) {
+        return !Address.isContract(address(this));
     }
 }
 
@@ -266,7 +384,7 @@ interface IDexfToken is IERC20 {
     ) external;
 }
 
-contract LPFarming is Context, Ownable, ReentrancyGuard {
+contract LPFarming is Context, Ownable, ReentrancyGuard, Initializable {
     using SafeMath for uint256;
     using SafeMath for uint128;
 
@@ -309,8 +427,6 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
     // id of last init epoch, for optimization purposes moved from struct to a single id.
     uint128 public lastInitializedEpoch;
 
-    address private _team;
-
     IDexfToken public _dexf;
 
     IPancakeSwapV2Pair public dexfBNBV2Pair;
@@ -329,10 +445,13 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
     event ManualEpochInit(address indexed caller, uint128 indexed epochId);
     event SwapAndLiquifyFromBNB(address indexed msgSender, uint256 totAmount, uint256 bnbAmount, uint256 amount);
 
-    constructor(address dexf) {
+    constructor() {
+    }
+
+    function initialize(address dexf, address owner) public initializer {
         _dexf = IDexfToken(dexf);
 
-        _pancakeswapV2Router = IPancakeSwapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
+        _pancakeswapV2Router = IPancakeSwapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
         // Create a Pancakeswap pair for dexf
         address pair = IPancakeSwapV2Factory(_pancakeswapV2Router.factory())
             .getPair(address(_dexf), _pancakeswapV2Router.WETH());
@@ -343,10 +462,11 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
                 .createPair(address(_dexf), _pancakeswapV2Router.WETH()));
         }
 
-        _epoch1Start = 1627012800;
+        _epoch1Start = block.timestamp + 1 weeks;
         _epochDuration = 24 hours;
 
-        _team = msg.sender;
+        initOwner(owner);
+        initGuard();
     }
 
     /**
@@ -578,59 +698,13 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Stake Dexf
-     */
-    function stakeDexf(uint256 tokenAmount, uint128 lockWeeks) external returns (bool) {
-        require(!isContract(_msgSender()), "Farming: Could not be contract.");
-        require(lockWeeks >= MIN_LOCK_DURATION && lockWeeks <= MAX_LOCK_DURATION, "Farming: Invalid lock duration");
-
-        // Transfer token to Contract
-        uint256 beforeAmount = _dexf.balanceOf(address(this));
-        _dexf.transferFrom(_msgSender(), address(this), tokenAmount);
-        uint256 afterAmount = _dexf.balanceOf(address(this));
-
-        // Check Initial Balance
-        uint256 initialBalance = dexfBNBV2Pair.balanceOf(address(this));
-
-        require(swapAndLiquifyFromDexf(afterAmount.sub(beforeAmount)), "Farming: Failed to get LP tokens.");
-
-        uint256 newBalance = dexfBNBV2Pair.balanceOf(address(this)).sub(initialBalance);
-
-        uint128 currentEpochId = getCurrentEpoch();
-
-        Stake[] storage stakes = _stakes[_msgSender()];
-        stakes.push(Stake(newBalance, currentEpochId, 0, lockWeeks, 0, currentEpochId > 0 ? currentEpochId - 1 : 0, block.timestamp, 0));
-
-        if (lastInitializedEpoch < currentEpochId) {
-            _initEpoch(currentEpochId);
-        }
-        totalMultipliers[currentEpochId] = totalMultipliers[currentEpochId].add(newBalance.mul(calcMultiplier(lockWeeks)));
-
-        if (numCheckpoints == 0) {
-            checkpoints[0].timestamp = block.timestamp;
-            checkpoints[0].multiplier = totalMultipliers[currentEpochId];
-            numCheckpoints = 1;
-        } else if (checkpoints[numCheckpoints - 1].timestamp == block.timestamp) {
-            checkpoints[numCheckpoints - 1].multiplier = totalMultipliers[currentEpochId];
-        } else {
-            checkpoints[numCheckpoints].timestamp = block.timestamp;
-            checkpoints[numCheckpoints].multiplier = totalMultipliers[currentEpochId];
-            numCheckpoints++;
-        }
-
-        emit Staked(_msgSender(), newBalance);
-
-        return true;
-    }
-
-    /**
      * @dev Stake ERC20 Token
      */
     function stakeToken(
         address fromTokenAddress,
         uint256 tokenAmount,
         uint128 lockWeeks
-    ) external returns (bool) {
+    ) external nonReentrant returns (bool) {
         require(!isContract(_msgSender()), "Farming: Could not be contract.");
         require(lockWeeks >= MIN_LOCK_DURATION && lockWeeks <= MAX_LOCK_DURATION, "Farming: Invalid lock duration");
 
@@ -676,7 +750,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard {
     /**
      * @dev Stake LP Token
      */
-    function stakeLPToken(uint256 amount, uint128 lockWeeks) external returns (bool) {
+    function stakeLPToken(uint256 amount, uint128 lockWeeks) external nonReentrant returns (bool) {
         require(!isContract(_msgSender()), "Farming: Could not be contract.");
         require(lockWeeks >= MIN_LOCK_DURATION && lockWeeks <= MAX_LOCK_DURATION, "Farming: Invalid lock duration");
 
