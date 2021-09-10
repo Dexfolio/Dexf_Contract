@@ -25,3 +25,24 @@ Then, from the root of this project, run the tests:
 ```
 truffle test
 ```
+
+## Dexf Contract
+
+You can test Dexf contract by forking mainnet into local.
+You will need to copy `start.sh.example` to `start.sh` in root directory.
+And please add your infura id and mnemonic.
+
+Then, from the root of this project, run the tests:
+
+```
+sh ./start.sh
+```
+
+```
+truffle test
+```
+or
+
+```
+truffle test ./test/LPFarmTest.js
+```

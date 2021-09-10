@@ -1,6 +1,7 @@
 const fs = require('fs');
 const dexfToken = artifacts.require('DEXF');
 const lpFarm = artifacts.require('LPFarming');
+const lpFarmProxy = artifacts.require('LPFarmingUpgradeableProxy');
 const erc20 = artifacts.require('ERC20Mock');
 
 function expertContractJSON(contractName, instance) {
@@ -21,7 +22,7 @@ module.exports = async function (deployer) {
   console.log('Contract deploy started.');
 
   await deployer.deploy(dexfToken);
-  await deployer.deploy(lpFarm, dexfToken.address);
+  await deployer.deploy(lpFarm);
   await deployer.deploy(erc20);
 
   console.log('Contract deploy finished.');
