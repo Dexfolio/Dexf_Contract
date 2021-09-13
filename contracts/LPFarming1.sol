@@ -437,8 +437,6 @@ contract LPFarming is Context, Ownable, ReentrancyGuard, Initializable {
 
     uint16[100] private _multipliers;
 
-    address public stakingVault;
-
     event Staked(address indexed account, uint256 amount);
     event Unstaked(address indexed account, uint256 amount);
     event EmergencyWithdraw(address indexed account, uint128 index, uint256 amount);
@@ -483,10 +481,6 @@ contract LPFarming is Context, Ownable, ReentrancyGuard, Initializable {
      */
     function setEpoch1Start(uint256 epochStartTime) external onlyOwner {
         _epoch1Start = epochStartTime;
-    }
-
-    function setStakingVault(address _stakingVault) external onlyOwner {
-        stakingVault = _stakingVault;
     }
 
     /*
@@ -915,7 +909,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard, Initializable {
         (uint256 total, uint128 lastEpochId) = getClaimAmountByIndex(_msgSender() ,index);
         require(total > 0, "Farming: Invalid claim");
 
-        _dexf.transferFrom(stakingVault, _msgSender(), total);
+        _dexf.claimStakingReward(_msgSender(), total);
         totalRewardDistributed = totalRewardDistributed.add(total);
 
         Stake[] storage stakes = _stakes[_msgSender()];
