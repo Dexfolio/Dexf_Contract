@@ -453,7 +453,7 @@ contract LPFarming is Context, Ownable, ReentrancyGuard, Initializable {
     function initialize(address dexf, address owner) public initializer {
         _dexf = IDexfToken(dexf);
 
-        _pancakeswapV2Router = IPancakeSwapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+        _pancakeswapV2Router = IPancakeSwapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
         // Create a Pancakeswap pair for dexf
         address pair = IPancakeSwapV2Factory(_pancakeswapV2Router.factory())
             .getPair(address(_dexf), _pancakeswapV2Router.WETH());
